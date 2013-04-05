@@ -1,0 +1,18 @@
+This Python module (available for 3.2 and 2.7) compiled and linked the Database REFPROP 9.0 (REFerence fluid PROPerties) for usage in Python.
+
+REFPROP software is a proprietary and need to be installed on the computer
+in order for this module to function. Please contact the National Institute
+of Standards and Technology (NIST) to obtain REFPROP
+
+FOR WINDOWS:
+Install the REFPROP software on your system.
+Add two environment variables called RPprefix and Path. See http://www.boulder.nist.gov/div838/theory/refprop/Frequently_asked_questions.htm at Excel Applications for more details.
+Install the python API to refprop in your python dist-packages
+
+FOR LINUX:
+use WINE to install refprop.exe in the C:\Program Files\REFPROP\ directory
+execute the binery file rp2so to compile the refprop shared object file, You need to have the following installed on Linux:
+	gfortran
+	sed
+	dos2unix
+Install the python API to refprop in your python dist-packages
