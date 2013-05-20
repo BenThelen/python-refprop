@@ -8,7 +8,7 @@
 u'''Allow refprop and multiRP module functional test of all functions'''
 
 from decimal import Decimal
-import refprop, platform
+import platform
 
 def settest(test):
     u'''set test module
@@ -52,7 +52,8 @@ def _maintest(rp):
         rp.setup(u'def', [u'water', u'ammonia'],)
 
         x = [0.5, 0.3]
-        rp.normalize(x)
+        prop = rp.normalize(x)
+        x = prop[u'x']
 
         prop = rp.critp(x)
         prop = rp.therm(prop[u'tcrit'], prop[u'Dcrit'], x)
@@ -163,8 +164,7 @@ def _maintest(rp):
         print u'press'
         print prop, u'\n'
 
-        #p = prop['p'] disabled due to error on ver 9.105
-        p = 739450.6482243013 #from previous run
+        p = prop[u'p']
 
         print u'purefld(1)'
         prop = rp.purefld(1)
@@ -189,7 +189,7 @@ def _maintest(rp):
         print rp.sath(47000, x, 0), u'\n'
 
         print u'sate'
-        print rp.sate(45000, x), u'\n'
+        print rp.sate(0.96047E-13, x), u'\n'
 
         print u'sats'
         print rp.sats(50, x, 0), u'\n'
@@ -198,7 +198,7 @@ def _maintest(rp):
         print rp.purefld(0), u'\n'
 
         x = [0.5, 0.3]
-        rp.normalize(x)
+        x = rp.normalize(x)[u'x']
 
         print u'csatk'
         print rp.csatk(1, t), u'\n'
@@ -217,7 +217,7 @@ def _maintest(rp):
         print prop, u'\n'
 
         print u'flsh, th'
-        print rp.flsh(u'tH', t, prop[u'h'], x, 1), u'\n'
+        print rp.flsh(u'tH', 305, prop[u'h'], x, 1), u'\n'
 
         print u'flsh, tD'
         print rp.flsh(u'tD', t, 30, x), u'\n'
@@ -272,23 +272,19 @@ def _maintest(rp):
         prop = rp.flsh(u'pE', p, prop[u'e'], x)
         print prop, u'\n'
 
-        print u'flsh, hs'
-        prop = rp.flsh(u'hs', prop[u'h'], 45, x)
-        print prop, u'\n'
-
         print u'flsh, es'
         prop = rp.flsh(u'es', prop[u'e'], prop[u's'], x)
         print prop, u'\n'
 
         print u'flsh, hs'
-        prop = rp.flsh(u'hs', prop[u'h'], 45, x)
+        prop = rp.flsh(u'hs', 40000, 100, x)
         print prop, u'\n'
 
         print u'flsh, es'
-        print rp.flsh(u'es', prop[u'e'], prop[u's'], x), u'\n'
+        print rp.flsh(u'es', 175, 13, x), u'\n'
 
         print u'flsh, Dh'
-        print rp.flsh(u'DH', 20, 20000, x), u'\n'
+        print rp.flsh(u'DH', 20, 18000, x), u'\n'
 
         print u'flsh, Ds'
         prop = rp.flsh(u'Ds', 20, 50, x)
@@ -575,7 +571,7 @@ def _maintest(rp):
         rp.setup(u'def', u'butane', u'ethane', u'propane', u'methane',)
         x = [0.5, 0.15, 0.3, 0.05]
         rp.setref(u'nbp')
-        prop = rp.flsh(u'tp', 260, 200, x)
+        prop = rp.flsh(u'tp', 260, 150, x)
         D = prop[u'D']
         print u'trnprp, setref NBP'
         print rp.trnprp(260, D, x), u'\n'
@@ -589,10 +585,10 @@ def _maintest(rp):
         print u'fugcof'
         print rp.fugcof(260, D, x), u'\n'
 
-        #function not supported in Windows
-        if platform.system() == u'Linux':
-            print u'phiderv'
-            print rp.phiderv(2, 1, 260, D, x), u'\n'
+        ##function not supported in Windows
+        #if platform.system() == 'Linux':
+            #print('phiderv')
+            #print(rp.phiderv(2, 1, 260, D, x), '\n')
 
         #function not supported in Windows
         if platform.system() == u'Linux':

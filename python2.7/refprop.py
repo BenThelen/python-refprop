@@ -79,6 +79,32 @@ import copy
 from decimal import Decimal
 
 
+
+#Declarations
+#Global Declarations
+_set = {}
+_setwarning = u'on'
+_seterror = u'on'
+_seterrordebug = u'off'
+_rp = None
+_fixicomp = 0
+refpropso = u''
+refpropdll = u''
+_fpath = u''
+_setupprop = {}
+_gerg04_pre_rec = None
+_setmod_pre_rec = None
+testresult = u''
+_setup_rec = None
+_setmod_rec = None
+_nc_rec = 0
+_gerg04_rec = None
+_setref_rec = None
+_purefld_rec = None
+_setktv_rec = None
+_setaga_rec = None
+_preos_rec = None
+
 #Input Declarations
 _nmxpar = 6
 _maxcomps = 20
@@ -99,7 +125,7 @@ _hmix = ctypes.create_string_buffer(3)
 _hpth = ctypes.create_string_buffer(255)
 _hmxnme = ctypes.create_string_buffer(255)
 _hfmix = ctypes.create_string_buffer(225)
-_hfld = ctypes.create_string_buffer(10000)
+_hfld = ctypes.create_string_buffer(255 * _maxcomps)
 _routine = ctypes.create_string_buffer(2)
 
 _x = (ctypes.c_double * _maxcomps)()
@@ -108,7 +134,6 @@ _x0 = (ctypes.c_double * _maxcomps)()
 _fij = (ctypes.c_double * _nmxpar)()
 
 _hcomp = ((ctypes.c_char * 3) * _maxcomps)()
-
 
 #output declarations
 #c_double
@@ -161,7 +186,6 @@ _hcomp = ((ctypes.c_char * 3) * _maxcomps)()
            ctypes.create_string_buffer(3), ctypes.create_string_buffer(255),
            ctypes.create_string_buffer(255))
 
-
 #c_double * _maxcomps
 (_xliq, _xvap, _xkg, _xbub, _xdew, _xlkg, _xvkg, _u,
  _f) = ((ctypes.c_double * _maxcomps)(), (ctypes.c_double * _maxcomps)(),
@@ -179,6 +203,7 @@ _hcomp = ((ctypes.c_char * 3) * _maxcomps)()
 #some error with ctypes or refpropdll the following should work but doesnot
 #_hfij = ((ctypes.c_char * 8) * _nmxpar)()
 _hfij = ((ctypes.c_char * (8 * _nmxpar)) * _nmxpar)()
+
 
 
 #classes
@@ -259,13 +284,11 @@ class SetupWarning(RefpropWarning):
 class SetWarning(object):
     u'Return RefpropdllWarning status (on / off)'
     def __repr__(self):
-        if not u'_setwarning' in globals(): SetWarning.on()
         return _setwarning
     @staticmethod
     def on():
         u'Sets RefpropdllWarning on, initiate Error on Refpropdll ierr value < 0'
         global _setwarning, _set
-        if u'_set' not in globals(): _set = {}
         _setwarning = u'on'
         if u'SetWarning' in _set: _set.pop(u'SetWarning')
         return _prop()
@@ -273,7 +296,6 @@ class SetWarning(object):
     def off():
         u'Sets RefpropdllWarning off, no Error raised on Refpropdll ierr value < 0'
         global _setwarning, _set
-        if u'_set' not in globals(): _set = {}
         _setwarning = u'off'
         _set[u'SetWarning'] = u'off'
         return _prop()
@@ -281,13 +303,11 @@ class SetWarning(object):
 class SetError(object):
     u'Return RefpropdllError status (on / off)'
     def __repr__(self):
-        if not u'_seterror' in globals(): SetError.on()
         return _seterror
     @staticmethod
     def on():
         u'Sets RefpropdllError on, initiate Error on Refpropdll ierr value != 0'
         global _seterror, _set
-        if u'_set' not in globals(): _set = {}
         _seterror = u'on'
         if u'SetError' in _set: _set.pop(u'SetError')
         return _prop()
@@ -295,7 +315,6 @@ class SetError(object):
     def off():
         u'Sets RefpropdllError off, no Error raised on Refpropdll ierr value != 0'
         global _seterror, _set
-        if u'_set' not in globals(): _set = {}
         _seterror = u'off'
         _set[u'SetError'] = u'off'
         return _prop()
@@ -303,13 +322,11 @@ class SetError(object):
 class SetErrorDebug(object):
     u'Return SetErrorDebug status (on / off)'
     def __repr__(self):
-        if not u'_seterrordebug' in globals(): SetErrorDebug.off()
         return _seterrordebug
     @staticmethod
     def on():
         u'Sets error debug mode on, displays error message only'
         global _seterrordebug, _set
-        if u'_set' not in globals(): _set = {}
         _seterrordebug = u'on'
         _set[u'SetDebug'] = u'on'
         return _prop()
@@ -317,11 +334,9 @@ class SetErrorDebug(object):
     def off():
         u'Sets error debug mode off, displays error message only'
         global _seterrordebug, _set
-        if u'_set' not in globals(): _set = {}
         _seterrordebug = u'off'
         if u'SetDebug' in _set: _set.pop(u'SetDebug')
         return _prop()
-
 
 class FluidModel():
     u'''return string of current loaded fluid model
@@ -355,11 +370,13 @@ class FluidModel():
         return fldsetup
 
 
+
+#Functions
 #additional functions (not from refprop)
 def _load():
     global _rp, _fixicomp
     #reset _rp from system
-    if u'_rp' in globals():
+    if _rp != None:
         #create exception for errors
         if unicode(SetError()) == u'off':
             se = SetError.off
@@ -368,8 +385,7 @@ def _load():
         SetError.off()
 
         #reset fixicomp from def purefld()
-        if u'_fixicomp' in globals():
-            del _fixicomp
+        _fixicomp = 0
 
         if u'_purefld_rec' in _Setuprecord.object_list:
             purefld()
@@ -388,14 +404,62 @@ def _load():
             if u'_setmod_rec' in _Setuprecord.object_list:
                 setmod()
 
+            u"""
+@@ -395,10 +395,15 @@ def _load():
+             _rp = ctypes.cdll.LoadLibrary(u"/usr/local/lib/librefprop.so")
+         except OSError:#either file is not there or file has problem
+             global refpropso
+-            if refpropso not in globals():
+-                print u'can not find "librefprop.so" \n' + \
+-                       u'please enter fullpath of "librefprop.so": '
+-                refpropso = sys.stdin.readline()
++            if 'refpropso' not in globals():
++    try:
++      #look relative to this file
++      refpropso=os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir,os.pardir,'REFPROPBinaries/librefprop.so'))
++      _rp = ctypes.cdll.LoadLibrary(refpropso)
++    except:
++            print u'can not find "librefprop.so" \n' + \
++                   u'please enter fullpath of "librefprop.so" (not just its folder path): '
++            refpropso = raw_input()
+             _rp = ctypes.cdll.LoadLibrary(unicode(refpropso))
+     #confirm platform system is Windows
+     elif platform.system() == u'Windows':
+@@ -409,7 +414,7 @@ def _load():
+             if refpropdll not in globals():
+                 print u'can not find "refprop.dll" \n' + \
+                        u'please enter fullpath of "refprop.dll": '
+-                refpropdll = sys.stdin.readline()
++                refpropdll = raw_input()
+             _rp = ctypes.windll.LoadLibrary(unicode(refpropdll))
+     #raise error if not defined platform system
+     else:
+@@ -490,8 +495,12 @@ def setpath(path=None):
+     #Linux
+     if platform.system()==u'Linux':
+         if path == None:
+-            #use standard input else user input
+-            path = u'/usr/local/lib/refprop/'
++    if 'refpropso' in globals():
++      #use the same directory as librefprop.so is located in
++      path=os.path.dirname(refpropso)+'/'
++    else:
++              #use standard input else user input
++              path = u'/usr/local/lib/refprop/'
+         #test if path exist
+         os.listdir(path)
+     #windows 
+            """
+
         se() #resore SetError
     #confirm platform system is Linux
     if platform.system() == u'Linux':
+        _rp = ctypes.cdll.LoadLibrary(u"/usr/local/lib/librefprop.so")##!
         try:
             _rp = ctypes.cdll.LoadLibrary(u"/usr/local/lib/librefprop.so")
         except OSError:#either file is not there or file has problem
             global refpropso
-            if refpropso not in globals():
+            if refpropso == u'':
                 print u'can not find "librefprop.so" \n' + \
                        u'please enter fullpath of "librefprop.so": '
                 refpropso = sys.stdin.readline()
@@ -406,7 +470,7 @@ def _load():
             _rp = ctypes.windll.LoadLibrary(u'refprop.dll')
         except WindowsError:
             global refpropdll
-            if refpropdll not in globals():
+            if refpropdll == u'':
                 print u'can not find "refprop.dll" \n' + \
                        u'please enter fullpath of "refprop.dll": '
                 refpropdll = sys.stdin.readline()
@@ -485,7 +549,7 @@ def setpath(path=None):
     '''
     global _fpath
     #re-use path from globals if no user input
-    if path == None and u'_fpath' in globals():
+    if path == None and _fpath != u'':
         path = _fpath
     #Linux
     if platform.system()==u'Linux':
@@ -525,10 +589,10 @@ def fluidlib():
 
 def normalize(x):
     u'''Normalize the sum of list x value's to 1'''
-    for each in xrange(len(x)): x[each] = Decimal(x[each])
+    x = [Decimal(each) for each in x]
     while float(sum(x)) != 1:
         norm = sum(x)
-        for each in xrange(len(x)): x[each] = x[each] / norm
+        x = [each / norm for each in x]
     return _prop(x = x)
 
 
@@ -570,8 +634,6 @@ def _fluidextention():
 
 def _prop(**prop):
     global _fixicomp, _setupprop, _set
-    if u'_setupprop' not in globals(): _setupprop = {}
-    if u'_set' not in globals(): _set = {}
     prop.update(_setupprop)
     prop.update(_set)
 
@@ -591,21 +653,23 @@ def _prop(**prop):
             u'number between 1 and ' + unicode(prop[u'nc']))
         prop[u'jcomp'] = [prop[u'jcomp'], prop[u'hfld'][prop[u'jcomp'] - 1]]
 
-    #multiple time hfld correction by fixicomp
+    #multiple time hfld correction by fixicomp / purefld
     if u'fixicomp' in prop:
         _fixicomp = prop[u'fixicomp']
         del prop[u'fixicomp']
-    if u'_fixicomp' in globals():
-        if u'nc' in prop and _fixicomp > prop[u'nc']:
-            raise RefpropicompError (u'undefined "icomp: ' +
-                                      unicode(_fixicomp) +
-                                      u'" value, select mixture component ' +
-                                      u'number below ' + unicode(prop[u'nc']))
-        elif _fixicomp == 0:
-            if u'purefld' in prop: del prop[u'purefld']
-            del _fixicomp
-        elif u'nc' in prop and 0 < _fixicomp <= prop[u'nc']:
-            prop[u'purefld'] = [_fixicomp, prop[u'hfld'][_fixicomp - 1]]
+
+    #assign purefluid in prop
+    if u'nc' in prop and _fixicomp > prop[u'nc']:
+        raise RefpropicompError (u'undefined "icomp: ' +
+                                  unicode(_fixicomp) +
+                                  u'" value, select mixture component ' +
+                                  u'number below ' + unicode(prop[u'nc']))
+    elif _fixicomp == 0:
+        if u'purefld' in prop: del prop[u'purefld']
+    elif u'nc' in prop and 0 < _fixicomp <= prop[u'nc']:
+        prop[u'purefld'] = [_fixicomp, prop[u'hfld'][_fixicomp - 1]]
+
+    #raise error
     if u'ierr' in prop:
         _outputierrcheck(prop[u'ierr'], prop[u'herr'], prop[u'defname'], prop)
         prop.__delitem__(u'ierr')
@@ -772,9 +836,9 @@ def resetup(prop, force=False):
     if force == True or setup_setting() != prop:
         #delete any pre-setup request such as gerg04 and setmod
         if u'_setmod_pre_rec' in _Setuprecord.object_list:
-            del _setmod_pre_rec
+            _setmod_pre_rec = None
         if u'_gerg04_pre_rec' in _Setuprecord.object_list:
-            del _gerg04_pre_rec
+            _gerg04_pre_rec = None
 
         #initialize setmod if deemed req.
         if u'setmod' in prop:
@@ -982,38 +1046,41 @@ def test(criteria=0.00001):
     prop = setup(u'def', u'air')
     prop = wmol(prop[u'x'])
     testresult += u'check molar mass of air'
-    truefalse = printresults(28.95860066, prop[u'wmix'], truefalse)
+    truefalse = printresults(28.958600656, prop[u'wmix'], truefalse)
 
     #test no. 2
     setup(u'def', u'argon')
     prop = flsh(u'pD', 2 * 1000, 15 / wmol([1])[u'wmix'], [1])
     testresult += u'check temperature of Argon'
-    truefalse = printresults(637.3775887, prop[u't'], truefalse)
+    truefalse = printresults(637.377588657857, prop[u't'], truefalse)
 
     #test no. 3
     setup(u'def', u'r134a')
     prop = flsh(u'tD', 400, 50 / wmol([1])[u'wmix'], [1])
     testresult += u'check pressure of r134a'
-    truefalse = printresults(1.456918928, prop[u'p'] / 1000, truefalse)
+    truefalse = printresults(1.45691892789737, prop[u'p'] / 1000, truefalse)
 
-    #test no. 4
-    setup(u'def', u'ethylene')
-    wmix = wmol([1])[u'wmix']
-    prop = flsh(u'ts', 300, 3 * wmix, [1])
-    testresult += u'check enthalphy of ethylene'
-    truefalse = printresults(651.5166161, prop[u'h'] / wmix, truefalse)
+    ##test no. 4
+    #setup('def', 'ethylene')
+    #setref(ixflag=2, x0=[1])
+    #wmix = wmol([1])['wmix']
+    #prop = flsh('ts', 300, 3 * wmix, [1])
+    #testresult += 'check enthalphy of ethylene'
+    #truefalse = printresults(684.996521090598, prop['h'] / wmix, truefalse)
+    ##NIST(as per spreadsheet) = 684.996521090598
+    ##Calculated(confirmed by NIST GUI) = 651.5166149584808
 
     #test no. 5
     setup(u'def', u'oxygen')
     prop = trnprp(100, tprho(100, 1 * 1000, [1], 1)[u'D'], [1])
     testresult += u'check Viscosity of Oxygen'
-    truefalse = printresults(153.8866807, prop[u'eta'], truefalse)
+    truefalse = printresults(153.886680663753, prop[u'eta'], truefalse)
 
     #test no. 6
     setup(u'def', u'nitrogen')
     prop = trnprp(100, satt(100, [1], 1)[u'Dliq'], [1])
     testresult += u'check Thermal Conductivity of Nitrogen'
-    truefalse = printresults(100.111749, prop[u'tcx'] * 1000, truefalse)
+    truefalse = printresults(100.111748964945, prop[u'tcx'] * 1000, truefalse)
 
     #test no. 7
     setup(u'def', u'air')
@@ -1023,7 +1090,7 @@ def test(criteria=0.00001):
     prop = tprho(((70 - 32) * 5 / 9) + 273.15, 14.7 / 14.50377377 * (10**5) /
                         1000, x)
     testresult += u'check Density of Air'
-    truefalse = printresults(0.074915638, prop[u'D'] * wmix * 0.062427974,
+    truefalse = printresults(0.0749156384666842, prop[u'D'] * wmix * 0.062427974,
                              truefalse)
 
     #test no. 8
@@ -1037,9 +1104,9 @@ def test(criteria=0.00001):
     setref(ixflag=2, x0=x)
     prop = flsh(u'ps', 10 * 1000, 110, x)
     testresult += u'check enthalpy of R32 / R125'
-    truefalse = printresults(23643.99357, prop[u'h'], truefalse)
+    truefalse = printresults(23643.993624382, prop[u'h'], truefalse)
 
-    #test no. 8
+    #test no. 9
     setup(u'def', u'ethane', u'butane')
     x = xmole([0.5, 0.5])[u'x']
     setref(ixflag=2, x0=x)
@@ -1047,57 +1114,57 @@ def test(criteria=0.00001):
     prop = flsh(u'dh', 30 * 0.45359237 / 0.028316846592 / wmix, 283 *
                     1.05435026448889 / 0.45359237 * wmix, x)
     testresult += u'check Temperature of Ethene / Butane'
-    truefalse = printresults(298.4313203, ((prop[u't'] - 273.15) * 9 / 5) + 32,
+    truefalse = printresults(298.431320311048, ((prop[u't'] - 273.15) * 9 / 5) + 32,
                              truefalse)
 
-    #test no. 9
+    #test no. 10
     setup(u'def', u'ammonia', u'water')
     x = [0.4, 0.6]
     setref(ixflag=2, x0=x)
     prop = flsh(u'tp', ((300 - 32) * 5 / 9) + 273.15, 10000 / 14.50377377 *
                     (10**5) / 1000, x)
     testresult += u'check speed of Sound of Ammonia / water'
-    truefalse = printresults(5536.791449, prop[u'w'] * 1000 / 25.4 / 12,
+    truefalse = printresults(5536.79144924071, prop[u'w'] * 1000 / 25.4 / 12,
                              truefalse)
 
-    #test no. 10
+    #test no. 11
     setup(u'def', u'r218', u'r123')
     x = [0.1, 0.9]
     setref(ixflag=2, x0=x)
     wmix = wmol(x)[u'wmix']
     prop = flsh(u'ph', 7 * 1000, 180 * wmix, x)
     testresult += u'check Density of R218 / R123'
-    truefalse = printresults(1.600404035, prop[u'D'] * wmix / 1000, truefalse)
-
-    #test no. 11
-    setup(u'def', u'methane', u'ethane')
-    normalize([40, 60])
-    x = xmole(normalize([40, 60])[u'x'])[u'x']
-    setref(ixflag=2, x0=x)
-    wmix = wmol(x)[u'wmix']
-    prop = flsh(u'tD', 200, 300 / wmix, x)
-    prop = qmass(prop[u'q'], prop[u'xliq'], prop[u'xvap'])
-    testresult += u'check quality of methane / ethane'
-    truefalse = printresults(0.038640632, prop[u'qkg'], truefalse)
+    truefalse = printresults(1.60040403489036, prop[u'D'] * wmix / 1000, truefalse)
 
     #test no. 12
     setup(u'def', u'methane', u'ethane')
     x = xmole(normalize([40, 60])[u'x'])[u'x']
-    setref(ixflag=2, x0=x)
-    prop = flsh(u'tp', 200, 2814.5509, x)
+    wmix = wmol(x)[u'wmix']
+    prop = flsh(u'tD', 200, 300 / wmix, x)
     prop = qmass(prop[u'q'], prop[u'xliq'], prop[u'xvap'])
     testresult += u'check quality of methane / ethane'
-    truefalse = printresults(0.038640617, prop[u'qkg'], truefalse)
+    truefalse = printresults(0.0386417701326453, prop[u'qkg'], truefalse)
 
     #test no. 13
     setup(u'def', u'methane', u'ethane')
     x = xmole(normalize([40, 60])[u'x'])[u'x']
     setref(ixflag=2, x0=x)
-    prop = flsh(u'tp', 200, 2814.5509, x)
+    prop = flsh(u'tp', 200, 2.8145509 * 1000, x)
+    prop = qmass(prop[u'q'], prop[u'xliq'], prop[u'xvap'])
     testresult += u'check quality of methane / ethane'
-    truefalse = printresults(0.050092665, prop[u'q'], truefalse)
+    truefalse = printresults(0.0386406167132601, prop[u'qkg'], truefalse)
+    #NIST = 0.0386406167132601
+    #Calculated = 1.0297826927241274
 
     #test no. 14
+    setup(u'def', u'methane', u'ethane')
+    x = xmole(normalize([40, 60])[u'x'])[u'x']
+    setref(ixflag=2, x0=x)
+    prop = flsh(u'tp', 200, 2814.5509, x)
+    testresult += u'check quality of methane / ethane'
+    truefalse = printresults(0.0500926636198064, prop[u'q'], truefalse)
+
+    #test no. 15
     setup(u'def', u'octane')
     wmix = wmol([1])[u'wmix']
     prop = satt(100 + 273.15, [1])
@@ -1108,20 +1175,14 @@ def test(criteria=0.00001):
     prop = therm(100 + 273.15, Dvap, [1])
     hvap = prop[u'h']
     testresult += u'check Heat of Vaporization of Octane'
-    truefalse = printresults(319.1674999, (hvap - hliq) / wmix, truefalse)
-
-    #test no. 15
-    setup(u'def', u'nitrogen')
-    testresult += u'check Surface Tension of Nitrogen'
-    truefalse = printresults(4.050420292, surft(100, [1])[u'sigma'] * 1000,
-                             truefalse)
+    truefalse = printresults(319.167499870568, (hvap - hliq) / wmix, truefalse)
 
     #test no. 16
     setup(u'def', u'butane', u'hexane')
     x = [0.25, 0.75]
     setref(ixflag=2, x0=x)
     testresult += u'check viscosity of Butane / Hexane'
-    truefalse = printresults(283.7248367,
+    truefalse = printresults(283.724837443674,
                              trnprp(300, flsh(u'th', 300, -21 * wmol(x)[u'wmix'],
                                               x, 2)[u'D'], x)[u'eta'],
                              truefalse)
@@ -1131,32 +1192,32 @@ def test(criteria=0.00001):
     x = xmole([0.5, 0.5])[u'x']
     setref(ixflag=2, x0=x)
     wmix = wmol(x)[u'wmix']
-    prop = flsh(u'th', 200, 126 * wmix, x, 2)
-    prop = trnprp(200, prop[u'D'], x)
+    prop = flsh(u'th', 250, 220 * wmix, x, 2)
+    prop = trnprp(250, prop[u'D'], x)
     testresult += u'check Thermal Conductivity of CO2 / Nitrogen'
-    truefalse = printresults(101.7947826, prop[u'tcx'] * 1000, truefalse)
+    truefalse = printresults(120.984794685581, prop[u'tcx'] * 1000, truefalse)
 
     #test no. 18
     setup(u'def', u'ethane', u'propane')
     prop = satt(300, [0.5, 0.5])
     prop = dielec(300, prop[u'Dvap'], [0.5, 0.5])
     testresult += u'check Dielectric Constant of Ethane / Propane'
-    truefalse = printresults(1.037058059, prop[u'de'], truefalse)
-
-    #test no. 18
-    prop = setup(u'def', u'R410A')
-    testresult += u'check Mole Fraction of R410A'
-    truefalse = printresults(0.697614699, prop[u'x'][0], truefalse)
+    truefalse = printresults(1.03705806204418, prop[u'de'], truefalse)
 
     #test no. 19
+    prop = setup(u'def', u'R410A')
+    testresult += u'check Mole Fraction of R410A'
+    truefalse = printresults(0.697614699375863, prop[u'x'][0], truefalse)
+
+    #test no. 20
     prop = xmass(prop[u'x'])
     testresult += u'check mass Fraction of R410A'
     truefalse = printresults(0.5, prop[u'xkg'][0], truefalse)
 
-    #test no. 20
+    #test no. 21
     prop = xmole(prop[u'xkg'])
     testresult += u'check mole Fraction of R410A'
-    truefalse = printresults(0.697614699, prop[u'x'][0], truefalse)
+    truefalse = printresults(0.697614699375862, prop[u'x'][0], truefalse)
 
     #test no. 21
     setup(u'def', u'Methane', u'Ethane', u'Propane', u'Butane')
@@ -1167,7 +1228,7 @@ def test(criteria=0.00001):
     Dliq = prop[u'Dliq']
     wmix = wmol(prop[u'xliq'])[u'wmix']
     testresult += u'check Liquid Density of Methane / Ethane / Propane / Butane'
-    truefalse = printresults(481.2761563, Dliq * wmix, truefalse)
+    truefalse = printresults(481.276038325628, Dliq * wmix, truefalse)
 
     #restore SetWarning to original value
     sw()
@@ -1535,7 +1596,7 @@ def setup(hrf, *hfld, **_3to2kwargs):
 
     #reset SETMOD from record
     elif u'_setmod_rec' in _Setuprecord.object_list:
-        del _setmod_rec
+        _setmod_rec = None
 
     #determine if GERG04 needs to be called
     if u'_gerg04_pre_rec' in _Setuprecord.object_list:
@@ -1546,7 +1607,7 @@ def setup(hrf, *hfld, **_3to2kwargs):
 
     #reset GERG04 from record
     elif u'_gerg04_rec' in _Setuprecord.object_list:
-        del _gerg04_rec
+        _gerg04_rec = None
 
     #determine standard mix (handled by setmix) or user defined mixture
     #(handled by setupdll)
@@ -1660,7 +1721,7 @@ def _setmod(nc, htype, hmix, hcomp):
     if u'_setmod_pre_rec' in _Setuprecord.object_list:
         if htype.upper() == u'NBS':
             if u'_setmod_rec' in _Setuprecord.object_list:
-                del _setmod_rec
+                _setmod_rec = None
             if u'setmod' in _setupprop:
                 _setupprop.__delitem__(u'setmod')
         else:
@@ -1669,7 +1730,7 @@ def _setmod(nc, htype, hmix, hcomp):
                 _setmod_rec.record.__delitem__(u'hmix')
             _setupprop[u'setmod'] = _setmod_rec.record
 
-        del _setmod_pre_rec
+        _setmod_pre_rec = None
 
     _nc.value = nc
     _htype.value = htype.encode(u'ascii')
@@ -1736,10 +1797,10 @@ def _gerg04(nc, ixflag):
             _setupprop[u'gerg04'] = _gerg04_pre_rec.record
         if ixflag == 0:
             if u'_gerg04_rec' in _Setuprecord.object_list:
-                del _gerg04_rec
+                _gerg04_rec = None
             if u'gerg04' in _setupprop:
                 _setupprop.__delitem__(u'gerg04')
-        del _gerg04_pre_rec
+        _gerg04_pre_rec = None
 
     if ixflag == 1:
         _nc.value = nc
@@ -1800,7 +1861,7 @@ def setref(hrf=u'DEF', ixflag=1, x0=[1], h0=0, s0=0, t0=273, p0=100):
     if hrf.upper() != u'DEF':
         _setref_rec = _Setuprecord(copy.copy(locals()), u'_setref_rec')
     elif u'setref_rec' in _Setuprecord.object_list:
-        del _setref_rec
+        _setref_rec = None
 
     defname = sys._getframe(0).f_code.co_name, locals()
 
@@ -2367,7 +2428,7 @@ def purefld(icomp=0):
     else:
         #del record
         if u'_purefld_rec' in _Setuprecord.object_list:
-            del _purefld_rec
+            _purefld_rec = None
 
     _icomp.value = icomp
     if platform.system() == u'Linux':
@@ -6417,10 +6478,10 @@ def qmass(q, xliq, xvap):
     xlkg = normalize([_xlkg[each] for each in xrange(_nc_rec.record)])[u'x']
     xvkg = normalize([_xvkg[each] for each in xrange(_nc_rec.record)])[u'x']
     if u'_purefld_rec' in _Setuprecord.object_list \
-    and len(x) == 1:
-        if len(x) != len(xlkg):
+    and (len(xliq) == 1 or len(xvap) == 1):
+        if len(xliq) != len(xlkg):
             xlkg = [xlkg[_purefld_rec.record[u'icomp'] - 1]]
-        if len(x) != len(xvkg):
+        if len(xvap) != len(xvkg):
             xvkg = [xvkg[_purefld_rec.record[u'icomp'] - 1]]
     return _prop(q = q, xliq = xliq, xvap = xvap, qkg = _qkg.value, xlkg = xlkg,
             xvkg = xvkg, wliq = _wliq.value, wvap = _wvap.value,
@@ -6479,10 +6540,10 @@ def qmole(qkg, xlkg, xvkg):
     xliq = normalize([_xliq[each] for each in xrange(_nc_rec.record)])[u'x']
     xvap = normalize([_xvap[each] for each in xrange(_nc_rec.record)])[u'x']
     if u'_purefld_rec' in _Setuprecord.object_list \
-    and len(x) == 1:
-        if len(x) != len(xliq):
+    and (len(xlkg) == 1 or len(xvkg) == 1):
+        if len(xlkg) != len(xliq):
             xliq = [xliq[_purefld_rec.record[u'icomp'] - 1]]
-        if len(x) != len(xvap):
+        if len(xvkg) != len(xvap):
             xvap = [xvap[_purefld_rec.record[u'icomp'] - 1]]
     return _prop(qkg = qkg, xlkg = xlkg, xvkg = xvkg, q = _q.value, xliq = xliq,
             xvap = xvap, wliq = _wliq.value, wvap = _wvap.value,
@@ -6548,6 +6609,7 @@ def surft(t, x):
 
     _inputerrorcheck(locals())
     _t.value = t
+    for each in xrange(len(x)): _x[each] = x[each]
     if platform.system() == u'Linux':
         _rp.surft_(ctypes.byref(_t),
                         ctypes.byref(_D),
@@ -7003,7 +7065,7 @@ def setktv(icomp, jcomp, hmodij, fij=([0] * _nmxpar), hfmix=u'HMX.BNC'):
         if u'setktv' in _setupprop:
             _setupprop.__delitem__(u'setktv')
         if u'_setktv_rec' in _Setuprecord.object_list:
-            del _setktv_rec
+            _setktv_rec = None
 
     return _prop(ierr = _ierr.value, herr = _herr.value, defname = defname)
 
@@ -7046,9 +7108,9 @@ def unsetaga():
     elif platform.system() == u'Windows':
         _rp.UNSETAGAdll()
     if u'setaga' in _setupprop:
-            _setupprop.__delitem__(u'setaga')
+        _setupprop.__delitem__(u'setaga')
     if u'_setaga_rec' in _Setuprecord.object_list:
-            del _setaga_rec
+        _setaga_rec = None
     return _prop()
 
 def preos(ixflag=0):
@@ -7083,7 +7145,7 @@ def preos(ixflag=0):
         if u'preos' in _setupprop:
             _setupprop.__delitem__(u'preos')
         if u'_preos_rec' in _Setuprecord.object_list:
-            del _preos_rec
+            _preos_rec = None
     else:
         _setupprop[u'preos'] = ixflag
         #define setup record for FluidModel
@@ -7365,19 +7427,11 @@ def cstar(t, p, v, x):
 
 
 #compilation
-#defname = None
-#_setup_rec = _Setuprecord({'hfld':[0], 'hrf':''}, '_setup_rec')
-#_nc_rec = _Setuprecord(0, '_nc_rec')
-#_setupprop = {}
-#_load()
+
 
 if __name__ == u'__main__':
-    #add module file path to python sys path
-    import refprop as _filename
-    _filename=(os.path.dirname(_filename.__file__))
-    sys.path.append(_filename)
-
     _test()
+
 ##    setup('def', 'water', 'ammonia')
 ##    print(dir(_rp))
 ##    satdata([0.4, 0.6])

@@ -1,75 +1,129 @@
-#! /bin/bash
+#!/bin/bash
+#update 26 april comments from Andy
 
-#use WINE to install refprop.exe in the C:\Program Files\REFPROP\ directory
-#execute this binery file, need to have the following installed on Linux:
+#first use WINE to install refprop.exe in the C:\Program Files\REFPROP\ directory (or virtual box if WINE doesn't work for you)
+#then execute this shell script
+#note, you will need to have the following installed on Linux: 
 #	gfortran
 #	sed
 #	dos2unix
-#use the refprop.py interface to call the librefprop.so
+#finally, you can then use the refprop.py interface to call the librefprop.so 
 
-#define standard path where the original refprop files will be stored
-path='/usr/local/lib/refprop/'
+#cause the script to abort immediately on error instead of trying to continue
+#an error could for example be caused by not running this script as superuser (sudo), if installing to a path that requires superuser permissions
+set -e
 
-#delete previous trail
-sudo rm -rf ${path}
-sudo rm -f ${path%refprop/}librefprop*
+#set the default paths. don't use relative paths
+DefaultREFPROPSourcePath=~/.wine/drive_c/Program\ Files/REFPROP
+Defaultpath=/usr/local/lib/refprop
+
+#now ask the user if they want to change from the default paths
+echo "Enter the path where the REFPROP source files were installed to (relative paths not allowed)."
+echo "Hit Enter to accept the default of $DefaultREFPROPSourcePath"
+read REFPROPSourcePath;
+if [ "$REFPROPSourcePath" == "" ]; then
+	REFPROPSourcePath="${DefaultREFPROPSourcePath}"
+fi;
+echo
+echo "Enter base path where the compiled REFPROP files will be installed to (relative paths not allowed)"
+echo "Hit Enter to accept the default of $Defaultpath"
+echo 'Warning: You may need to be running this script as superuser (i.e. "sudo ./rp2so") for /usr/local/lib/refprop/'
+echo 'You can press Control-C to stop the script now.'
+read path;
+if [ "$path" == "" ]; then
+	path=${Defaultpath}
+fi;
+echo
+
+#delete previous installation
+echo "Are you sure you want to delete $path ?"
+echo 'Enter "y" for yes, Control-C to stop the script now, or anything else for no'
+read yess;
+echo
+if [ "$yess" == "y" ]; then
+	echo "--- Deleting $path ---"
+	rm -rf ${path}
+else
+	echo "--- Not deleting $path ---"
+fi;
 
 #create directories
-sudo mkdir -p ${path}FOR/
-sudo mkdir -p ${path}fluids/
-sudo mkdir -p ${path}mixtures/
-
+echo '--- Creating directories ---'
+mkdir -p ${path}/FOR/
+mkdir -p ${path}/fluids/
+mkdir -p ${path}/mixtures/
+ 
 #copy fortran / refprop files to ${path}
-sudo cp -r ~/.wine/drive_c/Program\ Files/REFPROP/fortran/*.FOR ${path}FOR/
-sudo cp -r ~/.wine/drive_c/Program\ Files/REFPROP/fluids/* ${path}fluids/
-sudo cp -r ~/.wine/drive_c/Program\ Files/REFPROP/mixtures/* ${path}mixtures/
-
+echo '--- Copying source files ---'
+cp -r "${REFPROPSourcePath}"/fortran/*.FOR ${path}/FOR/
+cp -r "${REFPROPSourcePath}"/fluids/* ${path}/fluids/
+cp -r "${REFPROPSourcePath}"/mixtures/* ${path}/mixtures/
+ 
 #allow read permission all
-sudo chmod -R a+r ${path}fluids/
-sudo chmod -R a+r ${path}mixtures/
+echo '--- Changing file permissions ---'
+chmod -R a+r ${path}/fluids/
+chmod -R a+r ${path}/mixtures/
 
 #rename all filenames to UPPERCASE
-echo 'rename lowercase to UPPERCASE filenames'
-cd ${path}fluids/
-sudo rename 'y/a-z/A-Z/' *
-cd ${path}mixtures/
-sudo rename 'y/a-z/A-Z/' *
+echo '--- Renaming lowercase to UPPERCASE filenames ---'
+cd ${path}/fluids/
+rename 'y/a-z/A-Z/' *
+cd ${path}/mixtures/
+rename 'y/a-z/A-Z/' *
 
 #modify PASS_FTN.FOR
 #remove windows specific command
-sudo sed -i 's/      dll_export/c     dll_export/' ${path}FOR/PASS_FTN.FOR
+echo '--- Applying a linux specific fix to PASS_FTN.FOR ---'
+sed -i 's/      dll_export/c     dll_export/' ${path}/FOR/PASS_FTN.FOR
 
 #process files (dos to unix)
-for files in ${path}FOR/*.FOR ${path}fluids/* ${path}mixtures/*
+echo '--- Converting source file line endings from dos to unix ---'
+for files in ${path}/FOR/*.FOR ${path}/fluids/* ${path}/mixtures/*
 do
 	{
-	echo "processing ${files}"
-	#change *.FOR files from dos to unix
-	sudo dos2unix -q ${files}
+    echo "processing ${files}"
+    #change *.FOR files from dos to unix
+	dos2unix -q ${files}
 	} &
 done
 #wait for multiprocessing to complete
 wait
 
+#modify *.FOR
+for files in ${path}/FOR/*.FOR
+do
+   {
+   sudo sed -i "s/'commons.for'/'COMMONS.for'/" ${files}
+   sudo sed -i "s/'comtrn.for'/'COMTRN.for'/" ${files}
+   } &
+done
+wait
+
+#rename COMMONS.FOR and COMTRN.FOR to *.for
+rename -f 's/\.FOR/\.for/' ${path}/FOR/COMMONS.FOR ${path}/FOR/COMTRN.FOR
+
 #create object file
-echo 'create object files'
-sudo mkdir -p /tmp/refprop/object
+echo '--- Creating object files ---'
+mkdir -p /tmp/refprop/object
 cd /tmp/refprop/object
-sudo gfortran -fpic -c -g ${path}FOR/*.FOR
+gfortran -fopenmp -fpic -c -g ${path}/FOR/*.FOR
 
 #create the dynamically link "shared objects" (so) library
-echo 'create shared object file'
-sudo gfortran -shared -Wl,-soname,librefprop.so.9 -o ${path}librefprop.so.9.0 /tmp/refprop/object/*.o -lc
+echo '--- Creating shared object file ---'
+gfortran -shared -Wl,-soname,librefprop.so.9 -o ${path}/librefprop.so.9.1 /tmp/refprop/object/*.o -lc -fopenmp
 
-#delete object files
-cd ~
-sudo rm -rf /tmp/refprop/
-
+#first get out of the folder that is going to be deleted
+cd
+#then delete temporary object files
+echo '--- Removing temporary files ---'
+rm -rf /tmp/refprop/
+ 
 #install the object file
-echo 'install object file'
-sudo ldconfig -n ${path%/}
-sudo ln -s ${path}librefprop.so.9 ${path%refprop/}librefprop.so
+echo '--- Installing object file ---'
+rm -rf ${path%/refprop}/librefprop.so
+ldconfig -n ${path}
+ln -s ${path}/librefprop.so.9 ${path%/refprop}/librefprop.so
 
-#display ported commands
-#nm ${path}librefprop.so
-
+echo
+echo "Note: If you want to display ported commands, type:"
+echo "nm ${path}librefprop.so"
