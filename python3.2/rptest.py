@@ -7,6 +7,9 @@
 #-------------------------------------------------------------------------------
 '''Allow refprop and multiRP module functional test of all functions'''
 
+
+####################################################### test if some windows functions are working now with rp9.1
+
 from decimal import Decimal
 import platform
 
@@ -189,7 +192,7 @@ def _maintest(rp):
         print(rp.sath(47000, x, 0), '\n')
 
         print('sate')
-        print(rp.sate(0.96047E-13, x), '\n')
+        print(rp.sate(0.46047E-13, x), '\n')
 
         print('sats')
         print(rp.sats(50, x, 0), '\n')
@@ -573,7 +576,7 @@ def _maintest(rp):
         rp.setref('nbp')
         prop = rp.flsh('tp', 260, 150, x)
         D = prop['D']
-        print('trnprp, setref NBP')
+        print('trnprp, setref')
         print(rp.trnprp(260, D, x), '\n')
 
         print('B12')
@@ -585,10 +588,10 @@ def _maintest(rp):
         print('fugcof')
         print(rp.fugcof(260, D, x), '\n')
 
-        ##function not supported in Windows
-        #if platform.system() == 'Linux':
-            #print('phiderv')
-            #print(rp.phiderv(2, 1, 260, D, x), '\n')
+        #function not supported in Windows
+        if platform.system() == 'Linux':
+            print('phiderv')
+            print(rp.phiderv(1, 260, D, x), '\n')
 
         #function not supported in Windows
         if platform.system() == 'Linux':
@@ -598,7 +601,6 @@ def _maintest(rp):
         rp.setmod('tcx', 'ecs', ['tc2', 'tc1', 'tc2', 'tc2'])
         rp.setup('def', 'butane', 'ethane', 'propane', 'methane',)
         x = [0.5, 0.15, 0.3, 0.05]
-        rp.setref('nbp')
         prop = rp.flsh('tp', 260, 200, x)
         print('trnprp, setref NBP, setmod [tcx, ecs, tc2, tc1, tc2, tc2]')
         print(rp.trnprp(260, prop['D'], x), '\n')

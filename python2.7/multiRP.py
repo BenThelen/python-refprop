@@ -24,6 +24,12 @@ variables
 Note for windows users, initialtion of multirefprop does require some time
 which could render the time gain. On my system the initiation difference ratio
 between Linux and Windows is 14.04365604 times (in favour for Linux)'''
+
+## to be implemented
+## put _fldext in parent shared lib. for general access to all children this saves time....
+
+
+
 from __future__ import with_statement
 import os
 import sys

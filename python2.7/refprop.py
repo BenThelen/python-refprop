@@ -14,7 +14,7 @@
 #McLinden, M.O.,
 #NIST Standard Reference Database 23:  Reference Fluid Thermodynamic and
 #Transport Properties-REFPROP,
-#Version 9.0,
+#Version 9.1,
 #National Institute of Standards and Technology,
 #Standard Reference Data Program, Gaithersburg, 2010.
 #
@@ -69,145 +69,119 @@ dipole moment                       debye
 surface Tension                     N/m
 ----------------------------------------------------------------------------
 '''
-
 #imports
 from __future__ import division
-import ctypes, _ctypes
-import fnmatch
-import os, sys, platform
-import copy
+from fnmatch import fnmatch
+from os import listdir, path
+from platform import system
+from copy import copy
 from decimal import Decimal
+if system() == u'Linux':
+    from ctypes import (
+        c_long, create_string_buffer, c_double, c_char, byref, RTLD_GLOBAL,
+        CDLL)
+elif system() == u'Windows':
+    from ctypes import (
+        c_long, create_string_buffer, c_double, c_char, byref, RTLD_GLOBAL, 
+        windll)
 
 
 
 #Declarations
-#Global Declarations
-_set = {}
+#strings
+testresult = u''
 _setwarning = u'on'
 _seterror = u'on'
 _seterrordebug = u'off'
-_rp = None
-_fixicomp = 0
-refpropso = u''
-refpropdll = u''
+_setinputerrorcheck = u'on'
 _fpath = u''
-_setupprop = {}
-_gerg04_pre_rec = None
-_setmod_pre_rec = None
-testresult = u''
-_setup_rec = None
-_setmod_rec = None
-_nc_rec = 0
-_gerg04_rec = None
-_setref_rec = None
-_purefld_rec = None
-_setktv_rec = None
-_setaga_rec = None
-_preos_rec = None
 
-#Input Declarations
+#Dict
+_fldext = {}
+_setupprop = {}
+_set = {}
+
+#Intergers
+_fixicomp = 0
 _nmxpar = 6
 _maxcomps = 20
 
-_icomp = ctypes.c_long()
-_jcomp = ctypes.c_long()
-_kph = ctypes.c_long()
-_kq = ctypes.c_long()
-_kguess = ctypes.c_long()
-_nc = ctypes.c_long()
-_ixflag = ctypes.c_long()
-_v = ctypes.c_long()
-
-_hrf = ctypes.create_string_buffer(3)
-_htype = ctypes.create_string_buffer(3)
-_hmodij = ctypes.create_string_buffer(3)
-_hmix = ctypes.create_string_buffer(3)
-_hpth = ctypes.create_string_buffer(255)
-_hmxnme = ctypes.create_string_buffer(255)
-_hfmix = ctypes.create_string_buffer(225)
-_hfld = ctypes.create_string_buffer(255 * _maxcomps)
-_routine = ctypes.create_string_buffer(2)
-
-_x = (ctypes.c_double * _maxcomps)()
-_x0 = (ctypes.c_double * _maxcomps)()
-
-_fij = (ctypes.c_double * _nmxpar)()
-
-_hcomp = ((ctypes.c_char * 3) * _maxcomps)()
-
-#output declarations
-#c_double
-(_tcrit, _pcrit, _Dcrit, _zcrit, _t, _D, _p, _e, _h, _s, _A, _G, _cv, _cp, _w,
- _Z, _hjt, _xkappa, _beta, _dpdD, _d2pdD2, _dpdt, _dDdt, _dDdp, _spare1,
- _spare2, _spare3, _spare4, _xisenk, _xkt, _betas, _bs, _xkkt, _thrott, _pint,
- _spht, _Ar, _Gr, _dhdt_D, _dhdt_p, _dhdD_t, _dhdD_p, _dhdp_t, _dhdp_D, _b,
- _dbt, _c, _d, _Dliq, _Dvap, _t1, _p1, _D1, _t2, _p2, _D2, _t3, _p3, _D3, _csat,
- _cv2p, _tcx, _qkg, _wmix, _wmm, _ttrp, _tnbpt, _acf, _dip, _Rgas, _tmin, _tmax,
- _Dmax, _pmax, _Dmin, _tbub, _tdew, _pbub, _pdew, _Dlbub, _Dvdew, _wliq, _wvap,
- _de, _sigma, _eta, _h0, _s0, _t0, _p0, _vE, _eE, _hE, _sE, _aE, _gE, _pr, _er,
- _hr, _sr, _cvr, _cpr, _ba, _ca, _dct, _dct2, _Fpv, _dadn, _dnadn, _cs, _ts,
- _Ds, _ps, _ws, _var1, _var2,
- _q)=(ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double(), ctypes.c_double(), ctypes.c_double(), ctypes.c_double(),
-      ctypes.c_double())
-
-#create_string_buffer
-(_hname, _hn80, _hcas, _hbinp, _hmxrul, _hfm, _hcode, _hcite,
- _herr) = (ctypes.create_string_buffer(12), ctypes.create_string_buffer(80),
-           ctypes.create_string_buffer(12), ctypes.create_string_buffer(255),
-           ctypes.create_string_buffer(255), ctypes.create_string_buffer(255),
-           ctypes.create_string_buffer(3), ctypes.create_string_buffer(255),
-           ctypes.create_string_buffer(255))
-
-#c_double * _maxcomps
-(_xliq, _xvap, _xkg, _xbub, _xdew, _xlkg, _xvkg, _u,
- _f) = ((ctypes.c_double * _maxcomps)(), (ctypes.c_double * _maxcomps)(),
-         (ctypes.c_double * _maxcomps)(), (ctypes.c_double * _maxcomps)(),
-         (ctypes.c_double * _maxcomps)(), (ctypes.c_double * _maxcomps)(),
-         (ctypes.c_double * _maxcomps)(), (ctypes.c_double * _maxcomps)(),
-         (ctypes.c_double * _maxcomps)())
+#Nones
+(_rp, _gerg04_pre_rec, _setmod_pre_rec, _setup_rec, _setmod_rec, _gerg04_rec,
+_setref_rec, _purefld_rec, _setktv_rec, _setaga_rec, _preos_rec) \
+    = (None,)*11
 
 #c_long
-(_nroot, _k1, _k2, _k3, _ksat, _ierr,
- _kr) = (ctypes.c_long(), ctypes.c_long(), ctypes.c_long(), ctypes.c_long(),
-         ctypes.c_long(), ctypes.c_long(), ctypes.c_long())
+(_icomp, _jcomp, _kph, _kq, _kguess, _nc, _ixflag, _v, _nroot, _k1, _k2, _k3,
+    _ksat, _ierr, _kr) = (c_long(), c_long(), c_long(), c_long(), c_long(),
+    c_long(), c_long(), c_long(), c_long(), c_long(), c_long(), c_long(),
+    c_long(), c_long(), c_long())
 
-#c_char
+#create_string_buffer
+_routine = create_string_buffer(2)
+_hrf, _htype, _hmodij, _hmix, _hcode = (
+    create_string_buffer(3), create_string_buffer(3), create_string_buffer(3),
+    create_string_buffer(3), create_string_buffer(3))
+_hname, _hcas = (create_string_buffer(12), create_string_buffer(12))
+_hn80 = create_string_buffer(80)
+_hpth, _hmxnme, _hfmix, _hbinp, _hmxrul, _hfm, _hcite, _herr, _hfile = (
+    create_string_buffer(255), create_string_buffer(255),
+    create_string_buffer(255), create_string_buffer(255),
+    create_string_buffer(255), create_string_buffer(255),
+    create_string_buffer(255), create_string_buffer(255),
+    create_string_buffer(255))
+_hfld = create_string_buffer(10000)
+
+#C-doubles *
+_x, _x0, _xliq, _xvap, _xkg, _xbub, _xdew, _xlkg, _xvkg, _u, _f \
+    = ((c_double * _maxcomps)(), (c_double * _maxcomps)(),
+    (c_double * _maxcomps)(), (c_double * _maxcomps)(), (c_double * _maxcomps)(),
+    (c_double * _maxcomps)(), (c_double * _maxcomps)(), (c_double * _maxcomps)(),
+    (c_double * _maxcomps)(), (c_double * _maxcomps)(), (c_double * _maxcomps)())
+_fij = (c_double * _nmxpar)()
+
+#c_chars
+_hcomp = ((c_char * 3) * _maxcomps)()
 #some error with ctypes or refpropdll the following should work but doesnot
-#_hfij = ((ctypes.c_char * 8) * _nmxpar)()
-_hfij = ((ctypes.c_char * (8 * _nmxpar)) * _nmxpar)()
+#_hfij = ((c_char * 8) * _nmxpar)()
+_hfij = ((c_char * (8 * _nmxpar)) * _nmxpar)()
 
+#c_doubles
+(_tcrit, _pcrit, _Dcrit, _zcrit, _t, _D, _p, _e, _h, _s, _A, _G, _cv, _cp, _w,
+    _Z, _hjt, _xkappa, _beta, _dpdD, _d2pdD2, _dpdt, _dDdt, _dDdp, _spare1,
+    _spare2, _spare3, _spare4, _xisenk, _xkt, _betas, _bs, _xkkt, _thrott,
+    _pint, _spht, _Ar, _Gr, _dhdt_D, _dhdt_p, _dhdD_t, _dhdD_p, _dhdp_t,
+    _dhdp_D, _b, _dbt, _c, _d, _Dliq, _Dvap, _t1, _p1, _D1, _t2, _p2, _D2, _t3,
+    _p3, _D3, _csat, _cv2p, _tcx, _qkg, _wmix, _wmm, _ttrp, _tnbpt, _acf, _dip,
+    _Rgas, _tmin, _tmax, _Dmax, _pmax, _Dmin, _tbub, _tdew, _pbub, _pdew,
+    _Dlbub, _Dvdew, _wliq, _wvap, _de, _sigma, _eta, _h0, _s0, _t0, _p0, _vE,
+    _eE, _hE, _sE, _aE, _gE, _pr, _er, _hr, _sr, _cvr, _cpr, _ba, _ca, _dct,
+    _dct2, _Fpv, _dadn, _dnadn, _cs, _ts, _Ds, _ps, _ws, _var1, _var2, _q) \
+    = (c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double(), c_double(), c_double(), c_double(),
+    c_double(), c_double(), c_double())
+         
 
 
 #classes
-class _Setuprecord(object):
+class _Setuprecord():
     u'record setmod, setup, setktv, setref, purefld input values for def reset'
     object_list = []
 
@@ -221,65 +195,6 @@ class _Setuprecord(object):
     def __del__(self):
         self.object_list.remove(self.objectname)
 
-class RefpropError(Exception):
-    u'General RepropError for python module'
-    pass
-
-class RefpropdllError(RefpropError):
-    u'General RepropError from refprop'
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
-
-class RefpropicompError(RefpropError):
-    u'Error for incorrect component no input'
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
-
-class RefpropinputError(RefpropError):
-    u'Error for incorrect def input'
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
-
-class RefpropnormalizeError(RefpropError):
-    u'Error if sum component input does not match value 1'
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
-
-class RefproproutineError(RefpropError):
-    u'Error if routine input is unsupported'
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
-
-class RefpropWarning(RefpropError):
-    u'General Warning for python module'
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
-
-class RefpropdllWarning(RefpropWarning):
-    u'General RepropWarning from refprop'
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
-
-class SetupWarning(RefpropWarning):
-    u'General SetupWarning from refprop'
-    def __init__(self, value):
-        self.value = value
-    def __str__(self):
-        return repr(self.value)
 
 class SetWarning(object):
     u'Return RefpropdllWarning status (on / off)'
@@ -288,17 +203,18 @@ class SetWarning(object):
     @staticmethod
     def on():
         u'Sets RefpropdllWarning on, initiate Error on Refpropdll ierr value < 0'
-        global _setwarning, _set
+        global _setwarning
         _setwarning = u'on'
-        if u'SetWarning' in _set: _set.pop(u'SetWarning')
+        if u'SetWarng' in _set: _set.pop(u'SetWarning')
         return _prop()
     @staticmethod
     def off():
         u'Sets RefpropdllWarning off, no Error raised on Refpropdll ierr value < 0'
-        global _setwarning, _set
+        global _setwarning
         _setwarning = u'off'
         _set[u'SetWarning'] = u'off'
         return _prop()
+
 
 class SetError(object):
     u'Return RefpropdllError status (on / off)'
@@ -307,17 +223,18 @@ class SetError(object):
     @staticmethod
     def on():
         u'Sets RefpropdllError on, initiate Error on Refpropdll ierr value != 0'
-        global _seterror, _set
+        global _seterror
         _seterror = u'on'
         if u'SetError' in _set: _set.pop(u'SetError')
         return _prop()
     @staticmethod
     def off():
         u'Sets RefpropdllError off, no Error raised on Refpropdll ierr value != 0'
-        global _seterror, _set
+        global _seterror
         _seterror = u'off'
         _set[u'SetError'] = u'off'
         return _prop()
+
 
 class SetErrorDebug(object):
     u'Return SetErrorDebug status (on / off)'
@@ -326,17 +243,107 @@ class SetErrorDebug(object):
     @staticmethod
     def on():
         u'Sets error debug mode on, displays error message only'
-        global _seterrordebug, _set
+        global _seterrordebug
         _seterrordebug = u'on'
         _set[u'SetDebug'] = u'on'
         return _prop()
     @staticmethod
     def off():
         u'Sets error debug mode off, displays error message only'
-        global _seterrordebug, _set
+        global _seterrordebug
         _seterrordebug = u'off'
         if u'SetDebug' in _set: _set.pop(u'SetDebug')
         return _prop()
+
+
+class SetInputErrorCheck(object):
+    u'Return SetInputErrorCheck status (on / off)'
+    def __repr__(self):
+        return _setinputerrorcheck
+    @staticmethod
+    def on():
+        u'Sets errorinputerror mode on, displays input error message'
+        global _setinputerrorcheck
+        _setinputerrorcheck = u'on'
+        if u'SetInputErrorCheck' in _set: _set.pop(u'SetInputErrorCheck')
+        return _prop()
+    @staticmethod
+    def off():
+        u'Sets errorinputerror mode off, no input error displays message'
+        global _setinputerrorcheck
+        _setinputerrorcheck = u'off'
+        _set[u'SetInputErrorCheck'] = u'off'
+        return _prop()
+
+
+class RefpropError(Exception):
+    u'General RepropError for python module'
+    pass
+
+
+class RefpropinputError(RefpropError):
+    u'Error for incorrect input'
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+
+class RefproproutineError(RefpropError):
+    u'Error if routine input is unsupported'
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+
+class RefpropdllError(RefpropError):
+    u'General RepropError from refprop'
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+
+class RefpropicompError(RefpropError):
+    u'Error for incorrect component no input'
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+
+class RefpropnormalizeError(RefpropError):
+    u'Error if sum component input does not match value 1'
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+
+class RefpropWarning(RefpropError):
+    u'General Warning for python module'
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+
+class RefpropdllWarning(RefpropWarning):
+    u'General RepropWarning from refprop'
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+
+class SetupWarning(RefpropWarning):
+    u'General SetupWarning from refprop'
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
 
 class FluidModel():
     u'''return string of current loaded fluid model
@@ -350,6 +357,8 @@ class FluidModel():
     setref
     purefld'''
     def __repr__(self):
+        global _setup_rec, _setmod_rec, _gerg04_rec, _setref_rec, _purefld_rec
+        global _setktv_rec, _setaga_rec, _preos_rec
         fldsetup = u''
         if u'_setmod_rec' in _Setuprecord.object_list:
             fldsetup += u'setmod ==> ' + unicode(_setmod_rec.record) + u'\n'
@@ -373,113 +382,204 @@ class FluidModel():
 
 #Functions
 #additional functions (not from refprop)
-def _load():
-    global _rp, _fixicomp
-    #reset _rp from system
-    if _rp != None:
-        #create exception for errors
-        if unicode(SetError()) == u'off':
-            se = SetError.off
-        elif unicode(SetError()) == u'on':
-            se = SetError.on
-        SetError.off()
+def _checksetupmodel(model):
+    u'Raise warning if multiple models are being set'
+    models = []
+    #add setmod if called already
+    if u'_setmod_rec' in _Setuprecord.object_list:
+        models.append(u'setmod')
+    #add setktv if called already
+    if u'_setktv_rec' in _Setuprecord.object_list:
+        models.append(u'setktv')
+    #add gerg04 if called already
+    if u'_gerg04_rec' in _Setuprecord.object_list:
+        models.append(u'gerg04')
+    #add called model if not included already
+    if model not in models:
+        models.append(model)
+    #raise warning on multiple model calls and if warning is on
+    if len(models) > 1 and unicode(SetWarning()) == u'on':
+        raise SetupWarning(u'''Warning, calling multiple model setups (setmod,
+        setktv and gerg04 and others) could result in unexpected results.
+        Furthermore these multiple model calls are not supported by function
+        "resetup' and consequentely in the extention module "multiRP"''')
 
-        #reset fixicomp from def purefld()
-        _fixicomp = 0
 
-        if u'_purefld_rec' in _Setuprecord.object_list:
-            purefld()
-        if u'_setref_rec' in _Setuprecord.object_list:
-            setref()
-        if u'_setaga_rec' in _Setuprecord.object_list:
-            unsetaga()
-        if u'_preos_rec' in _Setuprecord.object_list:
-            preos()
-        if u'_setktv_rec' in _Setuprecord.object_list:
-            setktv(1, 1, u'RST')
-        if u'_gerg04_pre_rec' not in _Setuprecord.object_list:
-            if u'_gerg04_rec' in _Setuprecord.object_list:
-                gerg04()
-        if u'_setmod_pre_rec' not in _Setuprecord.object_list:
-            if u'_setmod_rec' in _Setuprecord.object_list:
-                setmod()
+def _outputierrcheck(ierr, herr, defname, prop):
+    #_ierr correction, some unknown reason the value is
+    # increased by 2**32
+    ierr_max = 9999
+    ierr_corr = 2**32
+    if ierr > ierr_max:
+        ierr = ierr - ((ierr + ierr_max) // ierr_corr) * ierr_corr
+    def mes_string(ERorWA):
+        string = u'*' * 80 + u'\n'
+        string += u'*' * 80 + u'\n'
+        string += ERorWA + u' raised' + u'\n'
+        string += u'setup details' + u'\n'
+        string += unicode(FluidModel()) + u'\n'
+        string += u'refprop dll call details' + u'\n'
+        string += unicode(defname) + u'\n'
+        string += u'error details' + u'\n'
+        string += unicode(ierr) + u'\n'
+        string += unicode(herr) + u'\n'
+        string += u'prop output' + u'\n'
+        string += unicode(prop) + u'\n'
+        string += u'*' * 80 + u'\n'*3
+        return string
+    if ierr < 0 \
+    and unicode(SetWarning()) == u'on' \
+    and unicode(SetError()) == u'on': #raise warning
+        #warning string
+        if unicode(SetErrorDebug()) == u'on':
+            print mes_string(u'warning')
+        raise RefpropdllWarning(herr.decode(u'utf-8'))
+    elif ierr > 0 and unicode(SetError()) == u'on': #raise error
+        #error string
+        if unicode(SetErrorDebug()) == u'on':
+            print mes_string(u'error')
+        raise RefpropdllError(herr.decode(u'utf-8'))
 
-            u"""
-@@ -395,10 +395,15 @@ def _load():
-             _rp = ctypes.cdll.LoadLibrary(u"/usr/local/lib/librefprop.so")
-         except OSError:#either file is not there or file has problem
-             global refpropso
--            if refpropso not in globals():
--                print u'can not find "librefprop.so" \n' + \
--                       u'please enter fullpath of "librefprop.so": '
--                refpropso = sys.stdin.readline()
-+            if 'refpropso' not in globals():
-+    try:
-+      #look relative to this file
-+      refpropso=os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir,os.pardir,'REFPROPBinaries/librefprop.so'))
-+      _rp = ctypes.cdll.LoadLibrary(refpropso)
-+    except:
-+            print u'can not find "librefprop.so" \n' + \
-+                   u'please enter fullpath of "librefprop.so" (not just its folder path): '
-+            refpropso = raw_input()
-             _rp = ctypes.cdll.LoadLibrary(unicode(refpropso))
-     #confirm platform system is Windows
-     elif platform.system() == u'Windows':
-@@ -409,7 +414,7 @@ def _load():
-             if refpropdll not in globals():
-                 print u'can not find "refprop.dll" \n' + \
-                        u'please enter fullpath of "refprop.dll": '
--                refpropdll = sys.stdin.readline()
-+                refpropdll = raw_input()
-             _rp = ctypes.windll.LoadLibrary(unicode(refpropdll))
-     #raise error if not defined platform system
-     else:
-@@ -490,8 +495,12 @@ def setpath(path=None):
-     #Linux
-     if platform.system()==u'Linux':
-         if path == None:
--            #use standard input else user input
--            path = u'/usr/local/lib/refprop/'
-+    if 'refpropso' in globals():
-+      #use the same directory as librefprop.so is located in
-+      path=os.path.dirname(refpropso)+'/'
-+    else:
-+              #use standard input else user input
-+              path = u'/usr/local/lib/refprop/'
-         #test if path exist
-         os.listdir(path)
-     #windows 
-            """
 
-        se() #resore SetError
-    #confirm platform system is Linux
-    if platform.system() == u'Linux':
-        _rp = ctypes.cdll.LoadLibrary(u"/usr/local/lib/librefprop.so")##!
-        try:
-            _rp = ctypes.cdll.LoadLibrary(u"/usr/local/lib/librefprop.so")
-        except OSError:#either file is not there or file has problem
-            global refpropso
-            if refpropso == u'':
-                print u'can not find "librefprop.so" \n' + \
-                       u'please enter fullpath of "librefprop.so": '
-                refpropso = sys.stdin.readline()
-            _rp = ctypes.cdll.LoadLibrary(unicode(refpropso))
-    #confirm platform system is Windows
-    elif platform.system() == u'Windows':
-        try:
-            _rp = ctypes.windll.LoadLibrary(u'refprop.dll')
-        except WindowsError:
-            global refpropdll
-            if refpropdll == u'':
-                print u'can not find "refprop.dll" \n' + \
-                       u'please enter fullpath of "refprop.dll": '
-                refpropdll = sys.stdin.readline()
-            _rp = ctypes.windll.LoadLibrary(unicode(refpropdll))
-    #raise error if not defined platform system
-    else:
-        raise RefpropError(u'undefined platform system')
-    #set system path
-    setpath()
+def _prop(**prop):
+    global _fixicomp, _setupprop, _set
+    prop.update(_setupprop)
+    prop.update(_set)
+
+    #local declarations
+    icomp = prop.get(u'icomp')
+    jcomp = prop.get(u'jcomp')
+    nc = prop.get(u'nc')
+    hfld = prop.get(u'hfld')
+    _fixicomp = prop.get(u'fixicomp')
+    ierr = prop.get(u'ierr')
+    
+    #one time hfld correction by icomp
+    if icomp != None and nc != None:
+        if icomp == 0 or icomp > nc:
+            raise RefpropicompError (u'undefined "icomp: ' +
+            unicode(icomp) + u'" value, select mixture component ' +
+            u'number between 1 and ' + unicode(nc))
+        prop[u'icomp'] = [icomp, hfld[icomp - 1]]
+
+    #one time hfld correction by jcomp
+    if jcomp != None and nc != None:
+        if jcomp == 0 or jcomp > nc:
+            raise RefpropicompError (u'undefined "jcomp: ' +
+            unicode(jcomp) + u'" value, select mixture component ' +
+            u'number between 1 and ' + unicode(nc))
+        prop[u'jcomp'] = [jcomp, hfld[jcomp - 1]]
+
+    #multiple time hfld correction by fixicomp / purefld
+    if _fixicomp != None:
+        del prop[u'fixicomp']
+
+    #assign purefluid in prop
+    if nc != None and _fixicomp != None and _fixicomp > nc:
+        raise RefpropicompError (u'undefined "icomp: ' +
+                                  unicode(_fixicomp) +
+                                  u'" value, select mixture component ' +
+                                  u'number below ' + unicode(nc))
+    elif _fixicomp == 0:
+        if u'purefld' in prop: del prop[u'purefld']
+    elif nc != None and _fixicomp != None and 0 < _fixicomp <= nc:
+        prop[u'purefld'] = [_fixicomp, hfld[_fixicomp - 1]]
+
+    #raise error
+    if ierr != None:
+        _outputierrcheck(ierr, prop[u'herr'], prop[u'defname'], prop)
+        del prop[u'ierr'], prop[u'herr'], prop[u'defname']
+
+    return prop
+
+
+def _inputerrorcheck(deflocals):
+    if unicode(SetInputErrorCheck()) == u'off':
+        return None
+    #from time import time#
+    checkstring = [u'hmxnme', u'hrf', u'htype', u'hmix', u'path', u'routine',
+                   u'hmodij', u'hfmix']
+    checkint = [u'icomp', u'kph', u'nc', u'ixflag', u'kguess', u'ksat', u'jcomp', u'kq']
+    checkfloat = [u't', u'D', u'h0', u's0', u't0', u'p0', u's', u'h', u'e', u'p', u'var1',
+                  u'var2', u'tbub', u'tdew', u'pbub', u'pdew', u'Dlbub', u'Dvdew',
+                  u'q', u'qkg', u'v']
+    checklistcomp = [u'x', u'xkg', u'xbub', u'xdew', u'xlkg', u'xvkg']
+    checklist = [u'fij', u'x0']
+    checkliststring = [u'hfld', u'hcomp']
+
+    for key in deflocals:
+        value = deflocals[key]
+        if key in checkstring:
+            if not type(value) == unicode:
+                raise RefpropinputError (u'expect "str" input for ' + key +
+                                          u' instead of "' +
+                                          unicode(value.__class__) +u'"')
+        elif key in checkint:
+            if not type(value) == int:
+                raise RefpropinputError (u'expect "int" input for ' +
+                                          key + u' instead of "' +
+                                          unicode(value.__class__) +u'"')
+        elif key in checkfloat:
+            if not type(value) == float \
+            and not type(value) == int:
+                raise RefpropinputError (u'expect "float" or "int" input for ' +
+                                          key + u' instead of "' +
+                                          unicode(value.__class__) +u'"')
+        elif key in checklistcomp:
+            if not value: pass
+            else:
+                lenvalue = len(value)
+                if not type(value) == list:
+                    raise RefpropinputError(u'expect "list" input for ' +
+                                             key + u' instead of "' +
+                                             unicode(value.__class__) +
+                                             u'"')
+                elif lenvalue != _nc_rec.record:
+                    if u'_purefld_rec' in _Setuprecord.object_list \
+                    and lenvalue != 1:
+                        raise RefpropicompError(u'input value ' + key +
+                                                 u' does not match the setup '
+                                                 u'fluid selection.')
+                    elif u'_purefld_rec' not in _Setuprecord.object_list:
+                        raise RefpropicompError(u'input value ' + key
+                                                 + u' does not match the setup '
+                                                 + u'fluid selection')
+                if sum(value) != 1:
+                    raise RefpropnormalizeError(u'sum input value '
+                                                 + key + u'is unequal to 1')
+        elif key in checklist:
+            if not type(value) == list:
+                raise RefpropinputError (u'expect "list" input for ' +
+                                          key + u' instead of "' +
+                                          unicode(value.__class__) +u'"')
+            elif len(value) > _nmxpar:
+                raise RefpropinputError (u'input value ' + key
+                                          + u' larger then max. value '
+                                          + unicode(_nmxpar))
+        elif key in checkliststring:
+            for each in value:
+                if type(each) == list:
+                    for other in each:
+                        if not type(other) == unicode:
+                            raise RefpropinputError (u'expect "list of str"' +
+                                u''' or "strs's" input for ''' + unicode(each) +
+                                u' instead of "' + unicode(other.__class__) +u'"')
+                elif not type(each) == unicode:
+                    raise RefpropinputError (u'expect "list of str" or' +
+                        u''' "strs's" input for ''' + unicode(each)
+                        + u' instead of "' + unicode(each.__class__) +u'"')
+
+
+def normalize(x):
+    u'''Normalize the sum of list x value's to 1'''
+    lsum = sum
+    x = [Decimal(each) for each in x]
+    norm = lsum(x)
+    while float(norm) != 1:
+        x = [each / norm for each in x]
+        norm = lsum(x)
+    x = [float(each) for each in x]
+    return _prop(x = x)
 
 
 def getphase(fld):
@@ -518,10 +618,10 @@ def getphase(fld):
     elif fld[u't'] > crit[u'tcrit']:
         return u"gas"
     #check if ['q'] in fld
-    if not u'q' in fld.keys():
-        if u'h' in fld.keys():
+    if not u'q' in fld:
+        if u'h' in fld:
             fld[u'q'] = flsh(u'ph', fld[u'p'], fld[u'h'], fld[u'x'])[u'q']
-        elif u's' in fld.keys():
+        elif u's' in fld:
             fld[u'q'] = flsh(u'ps', fld[u'p'], fld[u's'], fld[u'x'])[u'q']
     #check q
     if fld[u'q'] > 1:
@@ -536,47 +636,6 @@ def getphase(fld):
         return u"liquid"
 
 
-def setpath(path=None):
-    u'''Set Directory to refprop root containing fluids and mixtures. Default
-    value = 'c:/program files/refprop/'. This function must be called before
-    SETUP if path is not default. Note, all fluids and mxtures to be filed
-    under root/fluids and root/mixtures. Input in string format.
-
-    try and exception will also allow for:
-    'c:/program files/refprop/'
-    'c:/program files (x86)/refprop/'
-    '/usr/local/lib/refprop/' (for Linux)'
-    '''
-    global _fpath
-    #re-use path from globals if no user input
-    if path == None and _fpath != u'':
-        path = _fpath
-    #Linux
-    if platform.system()==u'Linux':
-        if path == None:
-            #use standard input else user input
-            path = u'/usr/local/lib/refprop/'
-        #test if path exist
-        os.listdir(path)
-    #windows
-    elif platform.system()==u'Windows':
-        if path == None:
-            #use the standard 2 windows options
-            path=u'c:/program files/refprop/'
-            #test 1
-            try: os.listdir(path)
-            except WindowsError:
-                path=u'c:/program files (x86)/refprop/'
-                #test 2
-                os.listdir(path)
-        #use the user input
-        else: os.listdir(path)
-    #set global path value
-    _fpath = path
-    #set path for refprop
-    _setpath(path)
-
-
 def fluidlib():
     u'''Displays all fluids and mixtures available on root directory. If root
     other then default directories:
@@ -584,235 +643,30 @@ def fluidlib():
             'c:/program files (x86)/refprop/'
             '/usr/local/lib/refprop/
     call setpath to correct'''
-    print _fluidextention()
-
-
-def normalize(x):
-    u'''Normalize the sum of list x value's to 1'''
-    x = [Decimal(each) for each in x]
-    while float(sum(x)) != 1:
-        norm = sum(x)
-        x = [each / norm for each in x]
-    return _prop(x = x)
-
-
-def _setpath(hpth):
-    u'''set the path where the fluid files are located
-
-    inputs:
-        hpth--location of the fluid files [character*255 variable].
-
-        The path does not need to contain the ending "/" and it can point
-        directly to the location where the DLL is stored, if a fluids
-        subdirectory (with the corresponding fluid files) is located there.
-        Default:
-        hpth='C:/Program Files/Refprop/'
-        hpth='C:/Program Files (x86)/Refprop/
-        hpth='/usr/local/lib/refprop/'
-        '''
-    _hpth.value = hpth.encode(u'ascii')
-    if platform.system() == u'Linux':
-        _rp.setpath_(ctypes.byref(_hpth), ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SETPATHdll(ctypes.byref(_hpth), ctypes.c_long(255))
+    return _fluidextention()
 
 
 def _fluidextention():
     u"""return fluid library"""
-    _fldext = {}
-    _fldext[_fpath + u'fluids/'] = [(each[:-4].upper()) for each in
-                                   os.listdir(_fpath + u'fluids/') if
-                                   fnmatch.fnmatch(each, u'*.FLD')]
-    _fldext[_fpath + u'fluids/'].extend([each for each in
-                                        os.listdir(_fpath + u'fluids/') if
-                                        fnmatch.fnmatch(each, u'*.PPF')])
-    _fldext[_fpath + u'mixtures/'] = [(each[:-4].upper()) for each in
-                                     os.listdir(_fpath + u'mixtures/') if
-                                     fnmatch.fnmatch (each, u'*.MIX')]
+    global _fldext, _fpath
+    if _fldext == {}:
+        fldext = {}
+        fluidslistdir = listdir(_fpath + u'fluids/')
+        mixtureslistdir = listdir(_fpath + u'mixtures/')
+        fldext[_fpath + u'fluids/'] = [(each[:-4].upper()) for each in
+                                            fluidslistdir if
+                                            fnmatch(each, u'*.FLD')]
+        fldext[_fpath + u'fluids/'].extend([each for each in fluidslistdir
+                                                 if fnmatch(each, u'*.PPF')])
+        fldext[_fpath + u'mixtures/'] = [(each[:-4].upper()) for each in
+                                              mixtureslistdir if fnmatch
+                                              (each, u'*.MIX')]
+        _fldext = fldext.copy()
     return _fldext
 
 
-def _prop(**prop):
-    global _fixicomp, _setupprop, _set
-    prop.update(_setupprop)
-    prop.update(_set)
-
-    #one time hfld correction by icomp
-    if u'icomp' in prop and u'nc' in prop:
-        if prop[u'icomp'] == 0 or prop[u'icomp'] > prop[u'nc']:
-            raise RefpropicompError (u'undefined "icomp: ' +
-            unicode(prop[u'icomp']) + u'" value, select mixture component ' +
-            u'number between 1 and ' + unicode(prop[u'nc']))
-        prop[u'icomp'] = [prop[u'icomp'], prop[u'hfld'][prop[u'icomp'] - 1]]
-
-    #one time hfld correction by jcomp
-    if u'jcomp' in prop and u'nc' in prop:
-        if prop[u'jcomp'] == 0 or prop[u'jcomp'] > prop[u'nc']:
-            raise RefpropicompError (u'undefined "jcomp: ' +
-            unicode(prop[u'jcomp']) + u'" value, select mixture component ' +
-            u'number between 1 and ' + unicode(prop[u'nc']))
-        prop[u'jcomp'] = [prop[u'jcomp'], prop[u'hfld'][prop[u'jcomp'] - 1]]
-
-    #multiple time hfld correction by fixicomp / purefld
-    if u'fixicomp' in prop:
-        _fixicomp = prop[u'fixicomp']
-        del prop[u'fixicomp']
-
-    #assign purefluid in prop
-    if u'nc' in prop and _fixicomp > prop[u'nc']:
-        raise RefpropicompError (u'undefined "icomp: ' +
-                                  unicode(_fixicomp) +
-                                  u'" value, select mixture component ' +
-                                  u'number below ' + unicode(prop[u'nc']))
-    elif _fixicomp == 0:
-        if u'purefld' in prop: del prop[u'purefld']
-    elif u'nc' in prop and 0 < _fixicomp <= prop[u'nc']:
-        prop[u'purefld'] = [_fixicomp, prop[u'hfld'][_fixicomp - 1]]
-
-    #raise error
-    if u'ierr' in prop:
-        _outputierrcheck(prop[u'ierr'], prop[u'herr'], prop[u'defname'], prop)
-        prop.__delitem__(u'ierr')
-        prop.__delitem__(u'herr')
-        prop.__delitem__(u'defname')
-
-    return prop
-
-
-def _inputerrorcheck(deflocals):
-    checkstring = [u'hmxnme', u'hrf', u'htype', u'hmix', u'path', u'routine',
-                   u'hmodij', u'hfmix']
-    checkint = [u'icomp', u'kph', u'nc', u'ixflag', u'kguess', u'ksat', u'jcomp', u'kq']
-    checkfloat = [u't', u'D', u'h0', u's0', u't0', u'p0', u's', u'h', u'e', u'p', u'var1',
-                  u'var2', u'tbub', u'tdew', u'pbub', u'pdew', u'Dlbub', u'Dvdew',
-                  u'q', u'qkg', u'v']
-    checklistcomp = [u'x', u'xkg', u'xbub', u'xdew', u'xlkg', u'xvkg']
-    checklist = [u'fij', u'x0']
-    checkliststring = [u'hfld', u'hcomp']
-
-    for each in checkstring:
-        if each in deflocals and not isinstance(deflocals[each], unicode):
-            raise RefpropinputError (u'expect "str" input for ' + unicode(each) +
-                                      u' instead of "' +
-                                      unicode((deflocals[each]).__class__) +u'"')
-    for each in checkint:
-        if each in deflocals and not isinstance(deflocals[each], int):
-            raise RefpropinputError (u'expect "int" input for ' +
-                                      unicode(each) + u' instead of "' +
-                                      unicode((deflocals[each]).__class__) +u'"')
-    for each in checkfloat:
-        if (each in deflocals and not isinstance(deflocals[each], float)
-             and not isinstance(deflocals[each], int)):
-            raise RefpropinputError (u'expect "float" or "int" input for ' +
-                                      unicode(each) + u' instead of "' +
-                                      unicode((deflocals[each]).__class__) +u'"')
-    for each in checklistcomp:
-        if each in deflocals:
-            if not deflocals[each]: pass
-            else:
-                if not isinstance(deflocals[each], list):
-                    raise RefpropinputError(u'expect "list" input for ' +
-                                             unicode(each) + u' instead of "' +
-                                             unicode((deflocals[each]).__class__) +
-                                             u'"')
-                elif u'_purefld_rec' in _Setuprecord.object_list:
-                    if len(deflocals[each]) != _nc_rec.record \
-                    and len(deflocals[each]) != 1:
-                        raise RefpropicompError(u'input value ' + unicode(each) +
-                                                 u' does not match the setup '
-                                                 u'fluid selection.')
-                elif len(deflocals[each]) != _nc_rec.record:
-                    raise RefpropicompError(u'input value ' + unicode(each) +
-                                             u' does not match the setup '
-                                             u'fluid selection')
-                if float(sum(deflocals[each])) != 1:
-                    raise RefpropnormalizeError(u'sum input value ' +
-                                                 unicode(each) +
-                                                 u' is unequal to 1')
-    for each in checklist:
-        if each in deflocals:
-            if not isinstance(deflocals[each], list):
-                raise RefpropinputError (u'expect "list" input for ' +
-                unicode(each) + u' instead of "' +
-                unicode((deflocals[each]).__class__) +u'"')
-            else:
-                if len(deflocals[each]) > _nmxpar:
-                    raise RefpropinputError (u'input value ' + unicode(each) +
-                    u' larger then max. value ' + _nmxpar)
-    for each in checkliststring:
-        if each in deflocals:
-            for items in deflocals[each]:
-                if isinstance(items, list):
-                    for others in items:
-                        if not isinstance(others, unicode):
-                            raise RefpropinputError (u'expect "list of str"' +
-                            u' or "strs' + u''''s" input for ''' + each +
-                            u' instead of "' + unicode((others).__class__) +u'"')
-                elif not isinstance(items, unicode):
-                    raise RefpropinputError (u'expect "list of str" or' +
-                    u''' "strs's" input for ''' + each + u' instead of "' +
-                    unicode((items).__class__) +u'"')
-
-
-def _outputierrcheck(ierr, herr, defname, prop):
-    #_ierr correction for Linux system, some unknown reason the value is
-    # increased by 2**32
-    while ierr > 9999:
-        ierr -= 2**32
-    def mes_string(ERorWA):
-        string = u'*' * 80 + u'\n'
-        string += u'*' * 80 + u'\n'
-        string += ERorWA + u' raised' + u'\n'
-        string += u'setup details' + u'\n'
-        string += unicode(FluidModel()) + u'\n'
-        string += u'refprop dll call details' + u'\n'
-        string += unicode(defname) + u'\n'
-        string += u'error details' + u'\n'
-        string += unicode(ierr) + u'\n'
-        string += unicode(herr) + u'\n'
-        string += u'prop output' + u'\n'
-        string += unicode(prop) + u'\n'
-        string += u'*' * 80 + u'\n'*3
-        return string
-    if ierr < 0 \
-    and unicode(SetWarning()) == u'on' \
-    and unicode(SetError()) == u'on': #raise warning
-        #warning string
-        if unicode(SetErrorDebug()) == u'on':
-            print mes_string(u'warning')
-        raise RefpropdllWarning(herr.decode(u'utf-8'))
-    elif ierr > 0 and unicode(SetError()) == u'on': #raise error
-        #error string
-        if unicode(SetErrorDebug()) == u'on':
-            print mes_string(u'error')
-        raise RefpropdllError(herr.decode(u'utf-8'))
-
-
-def _checksetupmodel(model):
-    u'Raise warning if multiple models are being set'
-    models = []
-    #add setmod if called already
-    if u'_setmod_rec' in _Setuprecord.object_list:
-        models.append(u'setmod')
-    #add setktv if called already
-    if u'_setktv_rec' in _Setuprecord.object_list:
-        models.append(u'setktv')
-    #add gerg04 if called already
-    if u'_gerg04_rec' in _Setuprecord.object_list:
-        models.append(u'gerg04')
-    #add called model if not included already
-    if model not in models:
-        models.append(model)
-    #raise warning on multiple model calls and if warning is on
-    if len(models) > 1 and unicode(SetWarning()) == u'on':
-        raise SetupWarning(u'''Warning, calling multiple model setups (setmod,
-        setktv and gerg04 and others) could result in unexpected results.
-        Furthermore these multiple model calls are not supported by function
-        "resetup' and consequentely in the extention module "multiRP"''')
-
-
 def resetup(prop, force=False):
-    u"""Resetup models and re-initialize  arrays.
+    u'''Resetup models and re-initialize  arrays.
 
     This will compare the loaded models vs requested model and re-setup
     refprop models if deemed required in the following sequence:
@@ -829,7 +683,7 @@ def resetup(prop, force=False):
 
     input:
         props--standard dictinary output from refprop functions
-        force--force resetup (True or False (standard input)"""
+        force--force resetup (True or False (standard input)'''
     global _gerg04_pre_rec, _setmod_pre_rec
     prop = setup_details(prop)
     #only resetup if loaded models are unequal to request (or force)
@@ -841,67 +695,78 @@ def resetup(prop, force=False):
             _gerg04_pre_rec = None
 
         #initialize setmod if deemed req.
-        if u'setmod' in prop:
-            setmod(prop[u'setmod'][u'htype'],
-                   prop[u'setmod'][u'hmix'],
-                   prop[u'setmod'][u'hcomp'])
+        stmd = prop.get(u'setmod')
+        if stmd != None:
+            setmod(stmd[u'htype'],
+                   stmd[u'hmix'],
+                   stmd[u'hcomp'])
 
         #initialize gerg04 if deemed req.
-        if u'gerg04' in prop:
-            gerg04(prop[u'gerg04'][u'ixflag'])
+        grg4 = prop.get(u'gerg04')
+        if grg4 != None:
+            gerg04(grg4[u'ixflag'])
 
         #initialize setup:
-        setup(prop[u'hrf'],  prop[u'hfld'], hfmix=prop[u'hfmix'])
+        hmxnme = prop.get(u'hmxnme')
+        if hmxnme != None:
+            setup(prop[u'hrf'],  hmxnme, hfmix=prop[u'hfmix'])
+        else:
+            setup(prop[u'hrf'],  prop[u'hfld'], hfmix=prop[u'hfmix'])
 
         #initialize setktv
-        if u'setktv' in prop:
-            setktv(prop[u'setktv'][u'icomp'],
-                   prop[u'setktv'][u'jcomp'],
-                   prop[u'setktv'][u'hmodij'],
-                   prop[u'setktv'][u'fij'],
-                   prop[u'setktv'][u'hfmix'])
+        stktv = prop.get(u'setktv')
+        if stktv != None:
+            setktv(stktv[u'icomp'],
+                   stktv[u'jcomp'],
+                   stktv[u'hmodij'],
+                   stktv[u'fij'],
+                   stktv[u'hfmix'])
 
         #initialize preos
-        if u'preos' in prop:
-            preos(prop[u'preos'][u'ixflag'])
+        prs = prop.get(u'preos')
+        if prs != None:
+            preos(prs[u'ixflag'])
 
         #initialize setaga
-        if u'setaga' in prop:
+        stg = prop.get(u'setaga')
+        if stg != None:
             setaga()
 
         #initialize setref
-        if u'setref' in prop:
-            if not u'ixflag' in prop[u'setref']:
+        strf = prop.get(u'setref')
+        if strf != None:
+            if not u'ixflag' in strf:
                 prop[u'setref'][u'ixflag'] = 1
-            if not u'x0' in prop[u'setref']:
+            if not u'x0' in strf:
                 prop[u'setref'][u'x0'] = [1]
-            if not u'h0' in prop[u'setref']:
+            if not u'h0' in strf:
                 prop[u'setref'][u'h0'] = 0
-            if not u's0' in prop[u'setref']:
+            if not u's0' in strf:
                 prop[u'setref'][u's0'] = 0
-            if not u't0' in prop[u'setref']:
+            if not u't0' in strf:
                 prop[u'setref'][u't0'] = 273
-            if not u'p0' in prop[u'setref']:
+            if not u'p0' in strf:
                 prop[u'setref'][u'p0'] =100
-            setref(prop[u'setref'][u'hrf'][0],
-                   prop[u'setref'][u'ixflag'],
-                   prop[u'setref'][u'x0'],
-                   prop[u'setref'][u'h0'],
-                   prop[u'setref'][u's0'],
-                   prop[u'setref'][u't0'],
-                   prop[u'setref'][u'p0'])
-            if len(prop[u'setref'][u'hrf']) == 2:
-                setref(prop[u'setref'][u'hrf'][1],
-                       prop[u'setref'][u'ixflag'],
-                       prop[u'setref'][u'x0'],
-                       prop[u'setref'][u'h0'],
-                       prop[u'setref'][u's0'],
-                       prop[u'setref'][u't0'],
-                       prop[u'setref'][u'p0'])
+            setref(strf[u'hrf'][0],
+                   strf[u'ixflag'],
+                   strf[u'x0'],
+                   strf[u'h0'],
+                   strf[u's0'],
+                   strf[u't0'],
+                   strf[u'p0'])
+            if len(strf[u'hrf']) == 2:
+                setref(strf[u'hrf'][1],
+                       strf[u'ixflag'],
+                       strf[u'x0'],
+                       strf[u'h0'],
+                       strf[u's0'],
+                       strf[u't0'],
+                       strf[u'p0'])
 
         #initialize purefld
-        if u'purefld' in prop:
-            purefld(prop[u'purefld'][0])
+        prfld = prop.get(u'purefluid')
+        if prfld != None:
+            purefld(prfld[0])
 
         #reset SetError
         if u'SetError' in prop:
@@ -918,12 +783,17 @@ def resetup(prop, force=False):
             SetErrorDebug.on()
         else: SetErrorDebug.off()
 
+        #reset SetInputErrorCheck
+        if u'SetInputErrorCheck' in prop:
+            SetInputErrorCheck.off()
+        else: SetInputErrorCheck.on()
+
     return setup_details(_prop())
 
 
 def setup_setting():
-    u"""Returns current loaded setup settings
-    output--Minimized dict. with basic refprop settings"""
+    u'''Returns current loaded setup settings
+    output--Minimized dict. with basic refprop settings'''
     return setup_details(_prop())
 
 
@@ -998,13 +868,18 @@ def setup_details(prop):
         if u'SetDebug' in prop:
             prps[u'SetDebug'] = u'on'
 
+        #setinputerrorceck
+        if u'SetInputErrorCheck' in prop:
+            prps[u'SetInputErrorCheck'] = u'off'
+
     return prps
 
 
 def _test():
-    u"""execute detailed test run of refprop"""
+    u'''execute detailed test run of refprop'''
     import rptest
     rptest.settest(u'refprop')
+
 
 def test(criteria=0.00001):
     u'''verify that the user's computer is returning proper calculations The
@@ -1087,8 +962,7 @@ def test(criteria=0.00001):
     x = setup(u'def', u'air')[u'x']
     setref(ixflag=2, x0=x)
     wmix = wmol(x)[u'wmix']
-    prop = tprho(((70 - 32) * 5 / 9) + 273.15, 14.7 / 14.50377377 * (10**5) /
-                        1000, x)
+    prop = tprho(((70 - 32) * 5 / 9) + 273.15, 14.7 / 14.50377377 * (10**5) / 1000, x)
     testresult += u'check Density of Air'
     truefalse = printresults(0.0749156384666842, prop[u'D'] * wmix * 0.062427974,
                              truefalse)
@@ -1219,7 +1093,7 @@ def test(criteria=0.00001):
     testresult += u'check mole Fraction of R410A'
     truefalse = printresults(0.697614699375862, prop[u'x'][0], truefalse)
 
-    #test no. 21
+    #test no. 22
     setup(u'def', u'Methane', u'Ethane', u'Propane', u'Butane')
     x = [0.7, 0.2, 0.05, 0.05]
     setref(ixflag=2, x0=x)
@@ -1237,13 +1111,13 @@ def test(criteria=0.00001):
 
 
 def psliq(p, s, x):
-    u"""flsh1 calculations with boundery check, raise RefpropinputError when
+    u'''flsh1 calculations with boundery check, raise RefpropinputError when
     input is outside bounderies
 
     Inputs:
         p--pressure [kPa]
         s--entropy [J/(mol*K)]
-        x--composition [array of mol frac]"""
+        x--composition [array of mol frac]'''
     #check if input is in critical region
     pcrit = critp(x)[u'pcrit']
     if p > pcrit:
@@ -1280,13 +1154,13 @@ def psliq(p, s, x):
 
 
 def psvap(p, s, x):
-    u"""flsh1 calculations with boundery check, raise RefpropinputError when
+    u'''flsh1 calculations with boundery check, raise RefpropinputError when
     input is outside bounderies
 
     Inputs:
         p--pressure [kPa]
         s--entropy [J/(mol*K)]
-        x--composition [array of mol frac]"""
+        x--composition [array of mol frac]'''
     #check if input is in critical region (pressure)
     prop = critp(x)
     pcrit = prop[u'pcrit']
@@ -1329,13 +1203,13 @@ def psvap(p, s, x):
 
 
 def ps2ph(p, s, x):
-    u"""flsh2 calculations with boundery check, raise RefpropinputError when
+    u'''flsh2 calculations with boundery check, raise RefpropinputError when
     input is outside bounderies
 
     Inputs:
         p--pressure [kPa]
         s--entropy [J/(mol*K)]
-        x--composition [array of mol frac]"""
+        x--composition [array of mol frac]'''
     #check if input is in critical region
     pcrit = critp(x)[u'pcrit']
     if p > pcrit:
@@ -1378,13 +1252,13 @@ def ps2ph(p, s, x):
 
 
 def phliq(p, h, x):
-    u"""flsh1 calculations with boundery check, raise RefpropinputError when
+    u'''flsh1 calculations with boundery check, raise RefpropinputError when
     input is outside bounderies
 
     Inputs:
         p--pressure [kPa]
         h--enthalpy [J/mol]
-        x--composition [array of mol frac]"""
+        x--composition [array of mol frac]'''
     #check if input is in critical region
     pcrit = critp(x)[u'pcrit']
     if p > pcrit:
@@ -1421,13 +1295,13 @@ def phliq(p, h, x):
 
 
 def phvap(p, h, x):
-    u"""flsh1 calculations with boundery check, raise RefpropinputError when
+    u'''flsh1 calculations with boundery check, raise RefpropinputError when
     input is outside bounderies
 
     Inputs:
         p--pressure [kPa]
         h--enthalpy [J/mol]
-        x--composition [array of mol frac]"""
+        x--composition [array of mol frac]'''
     #check if input is in critical region (pressure)
     prop = critp(x)
     pcrit = prop[u'pcrit']
@@ -1470,13 +1344,13 @@ def phvap(p, h, x):
 
 
 def ph2ph(p, h, x):
-    u"""flsh2 calculations with boundery check, raise RefpropinputError when
+    u'''flsh2 calculations with boundery check, raise RefpropinputError when
     input is outside bounderies
 
     Inputs:
         p--pressure [kPa]
         h--enthalpy [J/mol]
-        x--composition [array of mol frac]"""
+        x--composition [array of mol frac]'''
     #check if input is in critical region
     pcrit = critp(x)[u'pcrit']
     if p > pcrit:
@@ -1518,6 +1392,197 @@ def ph2ph(p, h, x):
     return prop
 
 
+def setpath(path=None):
+    u'''Set Directory to refprop root containing fluids and mixtures. Default
+    value = '/usr/local/lib/refprop/'.
+    This function must be called before
+    SETUP if path is not default. Note, all fluids and mixtures to be filed
+    under root/fluids and root/mixtures. Input in string format.
+    '''
+    global _purefld_rec, _setref_rec, _setaga_rec, _preos_rec
+    global _gerg04_pre_rec, _gerg04_rec, _setmod_pre_rec, _setmod_rec
+    global _setup_rec, _setktv_rec, _fixicomp, _fpath
+    
+    #reset fixicomp from def purefld()
+    _fixicomp = 0
+
+    #local declaration
+    object_list = _Setuprecord.object_list
+
+    if u'_purefld_rec' in object_list:
+        _purefld_rec = None
+    if u'_setref_rec' in object_list:
+        _setref_rec = None
+    if u'_setaga_rec' in object_list:
+        _setaga_rec = None
+    if u'_preos_rec' in object_list:
+        _preos_rec = None
+    if u'_setktv_rec' in object_list:
+        _setktv_rec = None
+    if u'_gerg04_pre_rec' in object_list:
+        _gerg04_pre_rec = None
+    if u'_gerg04_rec' in object_list:
+        _gerg04_rec = None
+    if u'_setmod_pre_rec' in object_list:
+        _setmod_pre_rec = None
+    if u'_setmod_rec' in object_list:
+        _setmod_rec = None
+    if u'_setup_rec' in object_list:
+        _setup_rec = None
+
+    #load refprop
+    path = _loadfile(path)
+
+    #set global path value
+    _fpath = path
+
+
+def _loadfile(fpath):
+    global _rpsetup0_, _rpsetmod_, _rpgerg04_, _rpsetref_, _rpsetmix_, \
+        _rpcritp_, _rptherm_, _rptherm0_, _rpresidual_, _rptherm2_, \
+        _rptherm3_, _rpchempot_, _rppurefld_, _rpname_, _rpentro_, \
+        _rpenthal_, _rpcvcp_, _rpcvcpk_, _rpgibbs_, _rpag_, _rppress_, \
+        _rpdpdd_, _rpdpddk_, _rpdpdd2_, _rpdpdt_, _rpdpdtk_, _rpdddp_, \
+        _rpdddt_, _rpdcdt_, _rpdcdt2_, _rpdhd1_, _rpfugcof_, _rpdbdt_, \
+        _rpvirb_, _rpvirc_, _rpvird_, _rpvirba_, _rpvirca_, _rpsatt_, \
+        _rpsatp_, _rpsatd_, _rpsath_, _rpsate_, _rpsats_, _rpcsatk_, \
+        _rpdptsatk_, _rpcv2pk_, _rptprho_, _rptpflsh_, _rptdflsh_, \
+        _rpthflsh_, _rptsflsh_, _rpteflsh_, _rppdflsh_, _rpphflsh_, \
+        _rppsflsh_, _rppeflsh_, _rphsflsh_, _rpesflsh_, _rpdhflsh_, \
+        _rpdsflsh_, _rpdeflsh_, _rptqflsh_, _rppqflsh_, _rpthfl1_, \
+        _rptsfl1_, _rptefl1_, _rppdfl1_, _rpphfl1_, _rppsfl1_, _rppefl1_, \
+        _rphsfl1_, _rpdhfl1_, _rpdsfl1_, _rpdefl1_, _rptpfl2_, _rpdhfl2_, \
+        _rpdsfl2_, _rpdefl2_, _rpthfl2_, _rptsfl2_, _rptefl2_, _rptdfl2_, \
+        _rppdfl2_, _rpphfl2_, _rppsfl2_, _rppefl2_, _rptqfl2_, _rppqfl2_, \
+        _rpabfl2_, _rpinfo_, _rprmix2_, _rpxmass_, _rpxmole_, _rplimitx_, \
+        _rplimitk_, _rplimits_, _rpqmass_, _rpqmole_, _rpwmoldll_, \
+        _rpdielec_, _rpsurft_, _rpsurten_, _rpmeltt_, _rpmeltp_, _rpsublt_, \
+        _rpsublp_, _rptrnprp_, _rpgetktv_, _rpgetmod_, _rpsetktv_, \
+        _rpsetaga_, _rpunsetaga_, _rppreos_, _rpgetfij_, _rpb12_, \
+        _rpexcess_, _rpphiderv_, _rpcstar_, _rpsetpath_, _rpfgcty_, _rpfpv_
+    
+    #set fpath  and filename
+    if system() == u'Linux':
+        if fpath == None:
+            fpath = u'/usr/local/lib/refprop/'
+        filename = fpath.rsplit(u'refprop/')[0] + u'librefprop.so'
+        if not path.isfile(filename):
+            raise RefpropError(u'can not find' + filename) 
+        _rp = CDLL(unicode(filename), mode=RTLD_GLOBAL)
+    elif system() == u'Windows':
+        if fpath == None:
+            #use the standard 2 windows options
+            fpath=u'c:/program files/refprop/'
+            #test 1
+            try: listdir(fpath)
+            except WindowsError:
+                fpath=u'c:/program files (x86)/refprop/'
+                #test 2
+                listdir(fpath)
+        filename = fpath + u'refprop.dll'
+        if not path.isfile(filename):
+            raise RefpropError(u'can not find' + filename) 
+        _rp = windll.LoadLibrary(unicode(filename))
+
+    #refprop functions
+    if system() == u'Linux':
+        (_rpsetup0_, _rpsetmod_, _rpgerg04_, _rpsetref_, _rpsetmix_,
+         _rpcritp_, _rptherm_, _rptherm0_, _rpresidual_, _rptherm2_,
+         _rptherm3_, _rpchempot_, _rppurefld_, _rpname_, _rpentro_,
+         _rpenthal_, _rpcvcp_, _rpcvcpk_, _rpgibbs_, _rpag_, _rppress_,
+         _rpdpdd_, _rpdpddk_, _rpdpdd2_, _rpdpdt_, _rpdpdtk_, _rpdddp_,
+         _rpdddt_, _rpdcdt_, _rpdcdt2_, _rpdhd1_, _rpfugcof_, _rpdbdt_,
+         _rpvirb_, _rpvirc_, _rpvird_, _rpvirba_, _rpvirca_, _rpsatt_,
+         _rpsatp_, _rpsatd_, _rpsath_, _rpsate_, _rpsats_, _rpcsatk_,
+         _rpdptsatk_, _rpcv2pk_, _rptprho_, _rptpflsh_, _rptdflsh_,
+         _rpthflsh_, _rptsflsh_, _rpteflsh_, _rppdflsh_, _rpphflsh_,
+         _rppsflsh_, _rppeflsh_, _rphsflsh_, _rpesflsh_, _rpdhflsh_,
+         _rpdsflsh_, _rpdeflsh_, _rptqflsh_, _rppqflsh_, _rpthfl1_,
+         _rptsfl1_, _rptefl1_, _rppdfl1_, _rpphfl1_, _rppsfl1_, _rppefl1_,
+         _rphsfl1_, _rpdhfl1_, _rpdsfl1_, _rpdefl1_, _rptpfl2_, _rpdhfl2_,
+         _rpdsfl2_, _rpdefl2_, _rpthfl2_, _rptsfl2_, _rptefl2_, _rptdfl2_,
+         _rppdfl2_, _rpphfl2_, _rppsfl2_, _rppefl2_, _rptqfl2_, _rppqfl2_,
+         _rpabfl2_, _rpinfo_, _rprmix2_, _rpxmass_, _rpxmole_, _rplimitx_,
+         _rplimitk_, _rplimits_, _rpqmass_, _rpqmole_, _rpwmoldll_,
+         _rpdielec_, _rpsurft_, _rpsurten_, _rpmeltt_, _rpmeltp_, _rpsublt_,
+         _rpsublp_, _rptrnprp_, _rpgetktv_, _rpgetmod_, _rpsetktv_,
+         _rpsetaga_, _rpunsetaga_, _rppreos_, _rpgetfij_, _rpb12_,
+         _rpexcess_, _rpphiderv_, _rpcstar_, _rpsetpath_, _rpfgcty_,
+         _rpfpv_) = \
+        (_rp.setup0_, _rp.setmod_, _rp.gerg04_, _rp.setref_, _rp.setmix_,
+         _rp.critp_, _rp.therm_, _rp.therm0_, _rp.residual_, _rp.therm2_,
+         _rp.therm3_, _rp.chempot_, _rp.purefld_, _rp.name_, _rp.entro_,
+         _rp.enthal_, _rp.cvcp_, _rp.cvcpk_, _rp.gibbs_, _rp.ag_, _rp.press_,
+         _rp.dpdd_, _rp.dpddk_, _rp.dpdd2_, _rp.dpdt_, _rp.dpdtk_, _rp.dddp_,
+         _rp.dddt_, _rp.dcdt_, _rp.dcdt2_, _rp.dhd1_, _rp.fugcof_, _rp.dbdt_,
+         _rp.virb_, _rp.virc_, _rp.vird_, _rp.virba_, _rp.virca_, _rp.satt_,
+         _rp.satp_, _rp.satd_, _rp.sath_, _rp.sate_, _rp.sats_, _rp.csatk_,
+         _rp.dptsatk_, _rp.cv2pk_, _rp.tprho_, _rp.tpflsh_, _rp.tdflsh_,
+         _rp.thflsh_, _rp.tsflsh_, _rp.teflsh_, _rp.pdflsh_, _rp.phflsh_,
+         _rp.psflsh_, _rp.peflsh_, _rp.hsflsh_, _rp.esflsh_, _rp.dhflsh_,
+         _rp.dsflsh_, _rp.deflsh_, _rp.tqflsh_, _rp.pqflsh_, _rp.thfl1_,
+         _rp.tsfl1_, _rp.tefl1_, _rp.pdfl1_, _rp.phfl1_, _rp.psfl1_, _rp.pefl1_,
+         _rp.hsfl1_, _rp.dhfl1_, _rp.dsfl1_, _rp.defl1_, _rp.tpfl2_, _rp.dhfl2_,
+         _rp.dsfl2_, _rp.defl2_, _rp.thfl2_, _rp.tsfl2_, _rp.tefl2_, _rp.tdfl2_,
+         _rp.pdfl2_, _rp.phfl2_, _rp.psfl2_, _rp.pefl2_, _rp.tqfl2_, _rp.pqfl2_,
+         _rp.abfl2_, _rp.info_, _rp.rmix2_, _rp.xmass_, _rp.xmole_, _rp.limitx_,
+         _rp.limitk_, _rp.limits_, _rp.qmass_, _rp.qmole_, _rp.wmoldll_,
+         _rp.dielec_, _rp.surft_, _rp.surten_, _rp.meltt_, _rp.meltp_, _rp.sublt_,
+         _rp.sublp_, _rp.trnprp_, _rp.getktv_, _rp.getmod_, _rp.setktv_,
+         _rp.setaga_, _rp.unsetaga_, _rp.preos_, _rp.getfij_, _rp.b12_,
+         _rp.excess_, _rp.phiderv_, _rp.cstar_, _rp.setpath_, _rp.fgcty_,
+         _rp.fpv_)
+    
+    elif system() == u'Windows':
+        (_rpsetup0_, _rpsetmod_, _rpgerg04_, _rpsetref_, _rpsetmix_,
+         _rpcritp_, _rptherm_, _rptherm0_, _rpresidual_, _rptherm2_,
+         _rptherm3_, _rpchempot_, _rppurefld_, _rpname_, _rpentro_,
+         _rpenthal_, _rpcvcp_, _rpcvcpk_, _rpgibbs_, _rpag_, _rppress_,
+         _rpdpdd_, _rpdpddk_, _rpdpdd2_, _rpdpdt_, _rpdpdtk_, _rpdddp_,
+         _rpdddt_, _rpdhd1_, _rpfugcof_, _rpdbdt_,
+         _rpvirb_, _rpvirc_, _rpvirba_, _rpvirca_, _rpsatt_,
+         _rpsatp_, _rpsatd_, _rpsath_, _rpsate_, _rpsats_, _rpcsatk_,
+         _rpdptsatk_, _rpcv2pk_, _rptprho_, _rptpflsh_, _rptdflsh_,
+         _rpthflsh_, _rptsflsh_, _rpteflsh_, _rppdflsh_, _rpphflsh_,
+         _rppsflsh_, _rppeflsh_, _rphsflsh_, _rpesflsh_, _rpdhflsh_,
+         _rpdsflsh_, _rpdeflsh_, _rptqflsh_, _rppqflsh_,
+         _rppdfl1_, _rpphfl1_, _rppsfl1_,
+         _rpinfo_, _rpxmass_, _rpxmole_, _rplimitx_,
+         _rplimitk_, _rplimits_, _rpqmass_, _rpqmole_, _rpwmoldll_,
+         _rpdielec_, _rpsurft_, _rpsurten_, _rpmeltt_, _rpmeltp_, _rpsublt_,
+         _rpsublp_, _rptrnprp_, _rpgetktv_, _rpsetktv_,
+         _rpsetaga_, _rpunsetaga_, _rppreos_, _rpgetfij_, _rpb12_,
+         _rpcstar_, _rpsetpath_, _rpfgcty_,
+         _rpfpv_) = \
+        (_rp.SETUPdll, _rp.SETMODdll, _rp.GERG04dll, _rp.SETREFdll,
+         _rp.SETMIXdll, _rp.CRITPdll, _rp.THERMdll, _rp.THERM0dll,
+         _rp.RESIDUALdll, _rp.THERM2dll, _rp.THERM3dll, _rp.CHEMPOTdll,
+         _rp.PUREFLDdll, _rp.NAMEdll, _rp.ENTROdll, _rp.ENTHALdll, _rp.CVCPdll,
+         _rp.CVCPKdll, _rp.GIBBSdll, _rp.AGdll, _rp.PRESSdll, _rp.DPDDdll,
+         _rp.DPDDKdll, _rp.DPDD2dll, _rp.DPDTdll, _rp.DPDTKdll, _rp.DDDPdll,
+         _rp.DDDTdll, _rp.DHD1dll, _rp.FUGCOFdll,
+         _rp.DBDTdll, _rp.VIRBdll, _rp.VIRCdll, _rp.VIRBAdll,
+         _rp.VIRCAdll, _rp.SATTdll, _rp.SATPdll, _rp.SATDdll, _rp.SATHdll,
+         _rp.SATEdll, _rp.SATSdll, _rp.CSATKdll, _rp.DPTSATKdll, _rp.CV2PKdll,
+         _rp.TPRHOdll, _rp.TPFLSHdll, _rp.TDFLSHdll, _rp.THFLSHdll,
+         _rp.TSFLSHdll, _rp.TEFLSHdll, _rp.PDFLSHdll, _rp.PHFLSHdll, _rp.PSFLSHdll,
+         _rp.PEFLSHdll, _rp.HSFLSHdll, _rp.ESFLSHdll, _rp.DHFLSHdll,
+         _rp.DSFLSHdll, _rp.DEFLSHdll, _rp.TQFLSHdll, _rp.PQFLSHdll,
+         _rp.PDFL1dll, _rp.PHFL1dll,
+         _rp.PSFL1dll,
+         _rp.INFOdll, _rp.XMASSdll, _rp.XMOLEdll,
+         _rp.LIMITXdll, _rp.LIMITKdll, _rp.LIMITSdll, _rp.QMASSdll, _rp.QMOLEdll,
+         _rp.WMOLdll, _rp.DIELECdll, _rp.SURFTdll, _rp.SURTENdll, _rp.MELTTdll,
+         _rp.MELTPdll, _rp.SUBLTdll, _rp.SUBLPdll, _rp.TRNPRPdll, _rp.GETKTVdll,
+         _rp.SETKTVdll, _rp.SETAGAdll, _rp.UNSETAGAdll,
+         _rp.PREOSdll, _rp.GETFIJdll, _rp.B12dll,
+         _rp.CSTARdll, _rp.SETPATHdll, _rp.FGCTYdll, _rp.FPVdll)
+    #set path for refprop
+    _hpth.value = fpath.encode(u'ascii')
+    _rpsetpath_(byref(_hpth), c_long(255))
+
+    return fpath
+
 #REFPROP functions
 def setup(hrf, *hfld, **_3to2kwargs):
     if 'hfmix' in _3to2kwargs: hfmix = _3to2kwargs['hfmix']; del _3to2kwargs['hfmix']
@@ -1540,25 +1605,20 @@ def setup(hrf, *hfld, **_3to2kwargs):
             included
         hfmix--file name [character*255] containing parameters for the binary
             mixture model'''
-    global _setup_rec, _setmod_rec, _nc_rec, _setupprop, _gerg04_rec
-
+    global _nc_rec, _fpath, _gerg04_pre_rec, _setmod_pre_rec, _setup_rec
+    global _setmod_rec, _gerg04_rec, _setref_rec, _purefld_rec, _setktv_rec
+    global _setaga_rec, _preos_rec, _setupprop
     _inputerrorcheck(locals())
 
     #define setup record for Fluidmodel
-    _setup_rec = _Setuprecord(copy.copy(locals()), u'_setup_rec')
-
-    defname = sys._getframe(0).f_code.co_name, locals()
+    _setup_rec = _Setuprecord(copy(locals()), u'_setup_rec')
 
     #empty global setup storage for new population
     _setupprop = {}
 
     #load refprop shared library
-    _load()
-
-    _hrf.value = hrf.upper().encode(u'ascii')
-    if hfmix == u'HMX.BNC':
-        _hfmix.value = (_fpath + u'fluids/HMX.BNC').encode(u'ascii')
-    else: _hfmix.value = hfmix.encode(u'ascii')
+    if _fpath == u'':
+        setpath()
 
     fluidname = u''
     listhfld = []
@@ -1570,7 +1630,7 @@ def setup(hrf, *hfld, **_3to2kwargs):
                 listhfld.append(other.upper())
         elif each.__class__ is unicode:
             listhfld.append(each.upper())
-
+    
     #create RP input format with file directory structure and file extention
     for each in listhfld:
         if _fluidextention()[_fpath + u'fluids/'].__contains__(each):
@@ -1580,38 +1640,46 @@ def setup(hrf, *hfld, **_3to2kwargs):
         elif _fluidextention()[_fpath + u'mixtures/'].__contains__(each):
             fluidname += _fpath + u'mixtures/' + each + u'.MIX|'
 
-    _nc.value = len(listhfld)
-    _nc_rec = _Setuprecord(_nc.value, u'_nc_rec')
-    _hfld.value = fluidname.encode(u'ascii')
+    nc = len(listhfld)
+    _nc_rec = _Setuprecord(nc, u'_nc_rec')
+
+    if u'_preos_rec' in _Setuprecord.object_list:
+        _preos_rec = None
+    if u'_setaga_rec' in _Setuprecord.object_list:
+        _setaga_rec = None
+    if u'_setref_rec' in _Setuprecord.object_list:
+        _setref_rec = None
+    if u'_setktv_rec' in _Setuprecord.object_list:
+        _setktv_rec = None
+    if u'_purefld_rec' in _Setuprecord.object_list:
+        _purefld_rec = None
 
     #determine if SETMOD needs to be called
     if u'_setmod_pre_rec' in _Setuprecord.object_list:
         #call setmod
-        ierr, herr, defname_setmod = _setmod(_nc.value,
-                                             _setmod_pre_rec.record[u'htype'],
-                                             _setmod_pre_rec.record[u'hmix'],
-                                             _setmod_pre_rec.record[u'hcomp'])
+        ierr, herr = _setmod(nc, _setmod_pre_rec.record[u'htype'],
+                             _setmod_pre_rec.record[u'hmix'],
+                             _setmod_pre_rec.record[u'hcomp'])
 
-        _prop(ierr = ierr, herr = herr, defname = defname_setmod)
-
+        _prop(ierr = ierr, herr = herr, defname = u'_setmod')
+    
     #reset SETMOD from record
     elif u'_setmod_rec' in _Setuprecord.object_list:
         _setmod_rec = None
-
+    
     #determine if GERG04 needs to be called
     if u'_gerg04_pre_rec' in _Setuprecord.object_list:
-        ierr, herr, defname_gerg04 = _gerg04(_nc.value,
-                                             _gerg04_pre_rec.record[u'ixflag'])
+        ierr, herr = _gerg04(nc, _gerg04_pre_rec.record[u'ixflag'])
 
-        _prop(ierr = ierr, herr = herr, defname = defname_gerg04)
+        _prop(ierr = ierr, herr = herr, defname = u'_gerg04')
 
     #reset GERG04 from record
     elif u'_gerg04_rec' in _Setuprecord.object_list:
         _gerg04_rec = None
-
+    
     #determine standard mix (handled by setmix) or user defined mixture
     #(handled by setupdll)
-    if _hfld.value.decode(u'utf-8').__contains__(u'.MIX|'):
+    if fluidname.__contains__(u'.MIX|'):
         if len(listhfld) > 1:
             raise RefpropinputError (u'too many standard mixture input, ' +
             u'can only select one')
@@ -1621,31 +1689,9 @@ def setup(hrf, *hfld, **_3to2kwargs):
     else:
         if u'hmxnme' in _setupprop:
             _setupprop.__delitem__(u'hmxnme')
-        if platform.system() == u'Linux':
-            _rp.setup0_(ctypes.byref(_nc),
-                        ctypes.byref(_hfld),
-                        ctypes.byref(_hfmix),
-                        ctypes.byref(_hrf),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(10000),
-                        ctypes.c_long(255),
-                        ctypes.c_long(3),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.SETUPdll(ctypes.byref(_nc),
-                         ctypes.byref(_hfld),
-                         ctypes.byref(_hfmix),
-                         ctypes.byref(_hrf),
-                         ctypes.byref(_ierr),
-                         ctypes.byref(_herr),
-                         ctypes.c_long(10000),
-                         ctypes.c_long(255),
-                         ctypes.c_long(3),
-                         ctypes.c_long(255))
-        _setupprop[u'hfld'], _setupprop[u'nc'] = listhfld, len(listhfld)
+        _setupprop[u'hfld'], _setupprop[u'nc'] = listhfld, nc
         _setupprop[u'hrf'], _setupprop[u'hfmix'] = hrf.upper(), hfmix
-        return _prop(ierr = _ierr.value, herr = _herr.value, defname = defname)
+        return _setup0(nc, fluidname, hfmix, hrf)
 
 
 def setmod(htype=u'NBS', hmix=u'NBS', *hcomp):
@@ -1706,7 +1752,47 @@ def setmod(htype=u'NBS', hmix=u'NBS', *hcomp):
         hcomp = [each for each in hcomp]
 
     #define setup record for FluidModel
-    _setmod_pre_rec = _Setuprecord(copy.copy(locals()), u'_setmod_pre_rec')
+    _setmod_pre_rec = _Setuprecord(copy(locals()), u'_setmod_pre_rec')
+
+
+def gerg04(ixflag=0):
+    u'''set the pure model(s) to those used by the GERG 2004 formulation.
+
+    This subroutine must be called before SETUP; it need not be called
+    at all if the default (NIST-recommended) models are desired.
+    To turn off the GERG settings, call this routine again with iflag=0,
+    and then call the SETUP routine to reset the parameters of the equations
+    of state.
+
+    inputs:
+        ixflag--set to 1 to load the GERG 2004 equations, set to 0 for defaults'''
+    global _gerg04_pre_rec
+    _inputerrorcheck(locals())
+
+    _gerg04_pre_rec = _Setuprecord(copy(locals()), u'_gerg04_pre_rec')
+
+    if not (ixflag == 0 or ixflag == 1):
+        raise RefpropinputError(u'ixflag value for function "gerg04" ' +
+                                 u'should either be 0 (default) or 1')
+
+
+#refprop functions
+def _setup0(nc, fluidname, hfmix, hrf):
+        global _fpath
+        _nc.value = nc
+        _hfld.value = fluidname.encode(u'ascii')
+        if hfmix == u'HMX.BNC':
+            _hfmix.value = (_fpath + u'fluids/HMX.BNC').encode(u'ascii')
+        else:
+            _hfmix.value = hfmix.encode(u'ascii')
+        _hrf.value = hrf.upper().encode(u'ascii')
+
+        _rpsetup0_(byref(_nc), byref(_hfld), byref(_hfmix), byref(_hrf),
+                   byref(_ierr), byref(_herr), c_long(10000), c_long(255),
+                   c_long(3), c_long(255))
+                     
+
+        return _prop(ierr = _ierr.value, herr = _herr.value, defname = u'_setup0')
 
 
 def _setmod(nc, htype, hmix, hcomp):
@@ -1714,8 +1800,6 @@ def _setmod(nc, htype, hmix, hcomp):
 
     #verify multiple model calls
     _checksetupmodel(u'setmod')
-
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     #define setup record for FluidModel
     if u'_setmod_pre_rec' in _Setuprecord.object_list:
@@ -1737,58 +1821,19 @@ def _setmod(nc, htype, hmix, hcomp):
     _hmix.value = hmix.encode(u'ascii')
     for each in xrange(len(hcomp)):
         _hcomp[each].value = hcomp[each].encode(u'ascii')
-    if platform.system() == u'Linux':
-        _rp.setmod_(ctypes.byref(_nc),
-                        ctypes.byref(_htype),
-                        ctypes.byref(_hmix),
-                        ctypes.byref(_hcomp),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(3),
-                        ctypes.c_long(3),
-                        ctypes.c_long(3),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SETMODdll(ctypes.byref(_nc),
-                        ctypes.byref(_htype),
-                        ctypes.byref(_hmix),
-                        ctypes.byref(_hcomp),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(3),
-                        ctypes.c_long(3),
-                        ctypes.c_long(3),
-                        ctypes.c_long(255))
-    return _ierr.value, _herr.value, defname
+    
+    _rpsetmod_(byref(_nc), byref(_htype), byref(_hmix), byref(_hcomp),
+               byref(_ierr), byref(_herr), c_long(3), c_long(3), c_long(3),
+               c_long(255))
+    
+    return _ierr.value, _herr.value
 
-def gerg04(ixflag=0):
-    u'''set the pure model(s) to those used by the GERG 2004 formulation.
-
-    This subroutine must be called before SETUP; it need not be called
-    at all if the default (NIST-recommended) models are desired.
-    To turn off the GERG settings, call this routine again with iflag=0,
-    and then call the SETUP routine to reset the parameters of the equations
-    of state.
-
-    inputs:
-        ixflag--set to 1 to load the GERG 2004 equations, set to 0 for defaults'''
-    global _gerg04_pre_rec
-
-    _inputerrorcheck(locals())
-
-    _gerg04_pre_rec = _Setuprecord(copy.copy(locals()), u'_gerg04_pre_rec')
-
-    if not (ixflag == 0 or ixflag == 1):
-        raise RefpropinputError(u'ixflag value for function "gerg04" ' +
-                                 u'should either be 0 (default) or 1')
 
 def _gerg04(nc, ixflag):
     global _gerg04_rec, _gerg04_pre_rec, _setupprop
 
     #verify multiple model calls
     _checksetupmodel(u'gerg04')
-
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     #define setup record for FluidModel
     if u'_gerg04_pre_rec' in _Setuprecord.object_list:
@@ -1805,21 +1850,14 @@ def _gerg04(nc, ixflag):
     if ixflag == 1:
         _nc.value = nc
         _ixflag.value = ixflag
-        if platform.system() == u'Linux':
-            _rp.gerg04_(ctypes.byref(_nc),
-                        ctypes.byref(_ixflag),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.GERG04dll(ctypes.byref(_nc),
-                          ctypes.byref(_ixflag),
-                          ctypes.byref(_ierr),
-                          ctypes.byref(_herr),
-                          ctypes.c_long(255))
-        return _ierr.value, _herr.value, defname
+        
+        _rpgerg04_(byref(_nc), byref(_ixflag), byref(_ierr), byref(_herr),
+                   c_long(255))
+        
+        return _ierr.value, _herr.value
     #system tweak as refprop call gerg04(ixflag=0) does not reset properly
-    elif ixflag == 0: return 0, u'', defname
+    elif ixflag == 0:
+        return 0, u''
 
 
 def setref(hrf=u'DEF', ixflag=1, x0=[1], h0=0, s0=0, t0=273, p0=100):
@@ -1859,41 +1897,20 @@ def setref(hrf=u'DEF', ixflag=1, x0=[1], h0=0, s0=0, t0=273, p0=100):
 
     #define setup record for FluidModel
     if hrf.upper() != u'DEF':
-        _setref_rec = _Setuprecord(copy.copy(locals()), u'_setref_rec')
+        _setref_rec = _Setuprecord(copy(locals()), u'_setref_rec')
     elif u'setref_rec' in _Setuprecord.object_list:
         _setref_rec = None
-
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     for each in xrange(_maxcomps): _x0[each] = 0
     for each in xrange(len(x0)): _x0[each] = x0[each]
     _hrf.value = hrf.upper().encode(u'ascii')
     _ixflag.value = ixflag
     _h0.value, _s0.value, _t0.value, _p0.value = h0, s0, t0, p0
-    if platform.system() == u'Linux':
-        _rp.setref_(ctypes.byref(_hrf),
-                          ctypes.byref(_ixflag),
-                          ctypes.byref(_x0),
-                          ctypes.byref(_h0),
-                          ctypes.byref(_s0),
-                          ctypes.byref(_t0),
-                          ctypes.byref(_p0),
-                          ctypes.byref(_ierr),
-                          ctypes.byref(_herr),
-                          ctypes.c_long(3),
-                          ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SETREFdll(ctypes.byref(_hrf),
-                          ctypes.byref(_ixflag),
-                          ctypes.byref(_x0),
-                          ctypes.byref(_h0),
-                          ctypes.byref(_s0),
-                          ctypes.byref(_t0),
-                          ctypes.byref(_p0),
-                          ctypes.byref(_ierr),
-                          ctypes.byref(_herr),
-                          ctypes.c_long(3),
-                          ctypes.c_long(255))
+    
+    _rpsetref_(byref(_hrf), byref(_ixflag), byref(_x0), byref(_h0),
+               byref(_s0), byref(_t0), byref(_p0), byref(_ierr),
+               byref(_herr), c_long(3), c_long(255))
+    
     if (hrf.upper() != u'DEF' and hrf.upper() != u'NBP' and hrf.upper() != u'ASH'
          and hrf.upper() != u'IIR'):
         href = {}
@@ -1927,73 +1944,31 @@ def setref(hrf=u'DEF', ixflag=1, x0=[1], h0=0, s0=0, t0=273, p0=100):
         if u'setref' in _setupprop:
             _setupprop.__delitem__(u'setref')
 
-    return _prop(ierr = _ierr.value, herr = _herr.value, defname = defname)
-
+    return _prop(ierr = _ierr.value, herr = _herr.value, defname = u'setref')
+    
 
 def _setmix(hmxnme, hrf, hfmix):
-    u'''open a mixture file (e.g., R410A.MIX) and read constituents and mole
-    fractions
-
-    inputs:
-        hmxnme--mixture file name to be read in [character*255]
-        hrf--reference state for thermodynamic calculations [character*3]
-            'def' : Default reference state as specified in fluid file is
-                applied to each pure component.
-            'nbs' : h,s = 0 at pure component normal boiling point(s).
-            'ash' : h,s = 0 for sat liquid at -40 C (ASHRAE convention)
-            'iir' : h = 200, s = 1.0 for sat liq at o C (IIR convention)
-        hfmix--file name [character*255] containing parameters for the binary
-            mixture model
-    outputs:
-        nc--number of fluids in mixture
-        hfld--array of file names specifying mixture components that were
-            used to call setup. [character*10000 variable]
-        x--array of mole fractions for the specified mixture'''
-    _inputerrorcheck(locals())
     global _nc_rec, _setupprop
-
-    defname = sys._getframe(0).f_code.co_name, locals()
-
+    _inputerrorcheck(locals())
     _hmxnme.value = (hmxnme + u'.MIX').encode(u'ascii')
     _hfmix.value = hfmix.encode(u'ascii')
     _hrf.value = hrf.upper().encode(u'ascii')
-    if platform.system() == u'Linux':
-        _rp.setmix_(ctypes.byref(_hmxnme),
-                         ctypes.byref(_hfmix),
-                         ctypes.byref(_hrf),
-                         ctypes.byref(_nc),
-                         ctypes.byref(_hfld),
-                         _x,
-                         ctypes.byref(_ierr),
-                         ctypes.byref(_herr),
-                         ctypes.c_long(255),
-                         ctypes.c_long(255),
-                         ctypes.c_long(3),
-                         ctypes.c_long(10000),
-                         ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SETMIXdll(ctypes.byref(_hmxnme),
-                         ctypes.byref(_hfmix),
-                         ctypes.byref(_hrf),
-                         ctypes.byref(_nc),
-                         ctypes.byref(_hfld),
-                         _x,
-                         ctypes.byref(_ierr),
-                         ctypes.byref(_herr),
-                         ctypes.c_long(255),
-                         ctypes.c_long(255),
-                         ctypes.c_long(3),
-                         ctypes.c_long(10000),
-                         ctypes.c_long(255))
+
+    _rpsetmix_(byref(_hmxnme), byref(_hfmix), byref(_hrf), byref(_nc),
+               byref(_hfld), _x, byref(_ierr), byref(_herr), c_long(255),
+               c_long(255), c_long(3), c_long(10000), c_long(255))
+    
     hfld = []
     _nc_rec = _Setuprecord(_nc.value, u'_nc_rec')
     for each in xrange(_nc.value):
         hfld.append(_name(each + 1))
+
     x = normalize([_x[each] for each in xrange(_nc.value)])[u'x']
     _setupprop[u'hmxnme'], _setupprop[u'hrf'] = hmxnme, hrf.upper()
     _setupprop[u'nc'], _setupprop[u'hfld'] = _nc.value, hfld
+    _setupprop[u'hfmix'] = hfmix
     return _prop(x = x, ierr = _ierr.value, herr = _herr.value,
-                        defname = defname)
+                  defname = u'setmix')
 
 
 def critp(x):
@@ -2005,30 +1980,17 @@ def critp(x):
         tcrit--critical temperature [K]
         pcrit--critical pressure [kPa]
         Dcrit--critical density [mol/L]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.critp_(_x,
-                   ctypes.byref(_tcrit),
-                   ctypes.byref(_pcrit),
-                   ctypes.byref(_Dcrit),
-                   ctypes.byref(_ierr),
-                   ctypes.byref(_herr),
-                   ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.CRITPdll(_x,
-                     ctypes.byref(_tcrit),
-                     ctypes.byref(_pcrit),
-                     ctypes.byref(_Dcrit),
-                     ctypes.byref(_ierr),
-                     ctypes.byref(_herr),
-                     ctypes.c_long(255))
+    
+    _rpcritp_(_x, byref(_tcrit), byref(_pcrit), byref(_Dcrit),
+              byref(_ierr), byref(_herr), c_long(255))
+    
     return _prop(x = x, tcrit = _tcrit.value, pcrit = _pcrit.value,
                   Dcrit = _Dcrit.value, ierr = _ierr.value, herr = _herr.value,
-                  defname = defname)
-
+                  defname = u'critp')
+                  
 
 def therm(t, D, x):
     u'''Compute thermal quantities as a function of temperature, density and
@@ -2056,33 +2018,13 @@ def therm(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.therm_(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_p),
-                        ctypes.byref(_e),
-                        ctypes.byref(_h),
-                        ctypes.byref(_s),
-                        ctypes.byref(_cv),
-                        ctypes.byref(_cp),
-                        ctypes.byref(_w),
-                        ctypes.byref(_hjt))
-    elif platform.system() == u'Windows':
-        _rp.THERMdll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_p),
-                        ctypes.byref(_e),
-                        ctypes.byref(_h),
-                        ctypes.byref(_s),
-                        ctypes.byref(_cv),
-                        ctypes.byref(_cp),
-                        ctypes.byref(_w),
-                        ctypes.byref(_hjt))
+
+    _rptherm_(byref(_t), byref(_D), _x, byref(_p), byref(_e), byref(_h),
+              byref(_s), byref(_cv), byref(_cp), byref(_w), byref(_hjt))
+
     return _prop(x = x, D = D, t = t, p = _p.value, e = _e.value, h = _h.value,
-            s = _s.value, cv = _cv.value, cp = _cp.value, w = _w.value,
-              hjt = _hjt.value)
+                  s = _s.value, cv = _cv.value, cp = _cp.value, w = _w.value,
+                  hjt = _hjt.value)
 
 
 def therm0(t, D, x):
@@ -2110,35 +2052,14 @@ def therm0(t, D, x):
     _t.value = t
     _D.value = D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.therm0_(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_p),
-                        ctypes.byref(_e),
-                        ctypes.byref(_h),
-                        ctypes.byref(_s),
-                        ctypes.byref(_cv),
-                        ctypes.byref(_cp),
-                        ctypes.byref(_w),
-                        ctypes.byref(_A),
-                        ctypes.byref(_G))
-    elif platform.system() == u'Windows':
-        _rp.THERM0dll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_p),
-                        ctypes.byref(_e),
-                        ctypes.byref(_h),
-                        ctypes.byref(_s),
-                        ctypes.byref(_cv),
-                        ctypes.byref(_cp),
-                        ctypes.byref(_w),
-                        ctypes.byref(_A),
-                        ctypes.byref(_G))
+
+    _rptherm0_(byref(_t), byref(_D), _x, byref(_p), byref(_e), byref(_h),
+              byref(_s), byref(_cv), byref(_cp), byref(_w), byref(_A),
+              byref(_G))
+    
     return _prop(x = x, D = D, t = t, p = _p.value, e = _e.value, h = _h.value,
-            s = _s.value, cv = _cv.value, cp = _cp.value, w = _w.value,
-            A = _A.value, G = _G.value)
+                  s = _s.value, cv = _cv.value, cp = _cp.value, w = _w.value,
+                  A = _A.value, G = _G.value)
 
 
 def residual (t, D, x):
@@ -2163,33 +2084,15 @@ def residual (t, D, x):
     _t.value = t
     _D.value = D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.residual_(ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            _x,
-                            ctypes.byref(_pr),
-                            ctypes.byref(_er),
-                            ctypes.byref(_hr),
-                            ctypes.byref(_sr),
-                            ctypes.byref(_cvr),
-                            ctypes.byref(_cpr),
-                            ctypes.byref(_Ar),
-                            ctypes.byref(_Gr))
-    elif platform.system() == u'Windows':
-        _rp.RESIDUALdll(ctypes.byref(_t),
-                                ctypes.byref(_D),
-                                _x,
-                                ctypes.byref(_pr),
-                                ctypes.byref(_er),
-                                ctypes.byref(_hr),
-                                ctypes.byref(_sr),
-                                ctypes.byref(_cvr),
-                                ctypes.byref(_cpr),
-                                ctypes.byref(_Ar),
-                                ctypes.byref(_Gr))
+
+    _rpresidual_(byref(_t), byref(_D), _x, byref(_pr), byref(_er),
+                 byref(_hr), byref(_sr), byref(_cvr), byref(_cpr),
+                 byref(_Ar), byref(_Gr))
+    
     return _prop(x = x, D = D, t = t, pr = _pr.value, er = _er.value,
             hr = _hr.value, sr = _sr.value, cvr = _cvr.value, cpr = _cpr.value,
             Ar = _Ar.value, Gr = _Gr.value)
+
 
 def therm2(t, D, x):
     u'''Compute thermal quantities as a function of temperature, density and
@@ -2227,58 +2130,14 @@ def therm2(t, D, x):
     _t.value = t
     _D.value = D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.therm2_(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_p),
-                        ctypes.byref(_e),
-                        ctypes.byref(_h),
-                        ctypes.byref(_s),
-                        ctypes.byref(_cv),
-                        ctypes.byref(_cp),
-                        ctypes.byref(_w),
-                        ctypes.byref(_Z),
-                        ctypes.byref(_hjt),
-                        ctypes.byref(_A),
-                        ctypes.byref(_G),
-                        ctypes.byref(_xkappa),
-                        ctypes.byref(_beta),
-                        ctypes.byref(_dpdD),
-                        ctypes.byref(_d2pdD2),
-                        ctypes.byref(_dpdt),
-                        ctypes.byref(_dDdt),
-                        ctypes.byref(_dDdp),
-                        ctypes.byref(_spare1),
-                        ctypes.byref(_spare2),
-                        ctypes.byref(_spare3),
-                        ctypes.byref(_spare4))
-    elif platform.system() == u'Windows':
-        _rp.THERM2dll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_p),
-                        ctypes.byref(_e),
-                        ctypes.byref(_h),
-                        ctypes.byref(_s),
-                        ctypes.byref(_cv),
-                        ctypes.byref(_cp),
-                        ctypes.byref(_w),
-                        ctypes.byref(_Z),
-                        ctypes.byref(_hjt),
-                        ctypes.byref(_A),
-                        ctypes.byref(_G),
-                        ctypes.byref(_xkappa),
-                        ctypes.byref(_beta),
-                        ctypes.byref(_dpdD),
-                        ctypes.byref(_d2pdD2),
-                        ctypes.byref(_dpdt),
-                        ctypes.byref(_dDdt),
-                        ctypes.byref(_dDdp),
-                        ctypes.byref(_spare1),
-                        ctypes.byref(_spare2),
-                        ctypes.byref(_spare3),
-                        ctypes.byref(_spare4))
+
+    _rptherm2_(byref(_t), byref(_D), _x, byref(_p), byref(_e), byref(_h),
+                byref(_s), byref(_cv), byref(_cp), byref(_w), byref(_Z),
+                byref(_hjt), byref(_A), byref(_G), byref(_xkappa),
+                byref(_beta), byref(_dpdD), byref(_d2pdD2), byref(_dpdt),
+                byref(_dDdt), byref(_dDdp), byref(_spare1), byref(_spare2),
+                byref(_spare3), byref(_spare4))
+
     return _prop(x = x, D = D, t = t, p = _p.value, e = _e.value, h = _h.value,
             s = _s.value, cv = _cv.value, cp = _cp.value, w = _w.value,
             Z = _Z.value, hjt = _hjt.value, A = _A.value, G = _G.value,
@@ -2309,34 +2168,11 @@ def therm3(t, D, x):
     _t.value = t
     _D.value = D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.therm3_(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_xkappa),
-                        ctypes.byref(_beta),
-                        ctypes.byref(_xisenk),
-                        ctypes.byref(_xkt),
-                        ctypes.byref(_betas),
-                        ctypes.byref(_bs),
-                        ctypes.byref(_xkkt),
-                        ctypes.byref(_thrott),
-                        ctypes.byref(_pint),
-                        ctypes.byref(_spht))
-    elif platform.system() == u'Windows':
-        _rp.THERM3dll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_xkappa),
-                        ctypes.byref(_beta),
-                        ctypes.byref(_xisenk),
-                        ctypes.byref(_xkt),
-                        ctypes.byref(_betas),
-                        ctypes.byref(_bs),
-                        ctypes.byref(_xkkt),
-                        ctypes.byref(_thrott),
-                        ctypes.byref(_pint),
-                        ctypes.byref(_spht))
+    
+    _rptherm3_(byref(_t), byref(_D), _x, byref(_xkappa), byref(_beta),
+                byref(_xisenk), byref(_xkt), byref(_betas), byref(_bs),
+                byref(_xkkt), byref(_thrott), byref(_pint), byref(_spht))
+    
     return _prop(x = x, D = D, t = t, xkappa = _xkappa.value,
         beta = _beta.value, xisenk = _xisenk.value, xkt = _xkt.value,
         betas = _betas.value, bs = _bs.value, xkkt = _xkkt.value,
@@ -2359,18 +2195,9 @@ def fpv(t, D, p, x):
     _D.value = D
     _p.value = p
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.fpv_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    ctypes.byref(_p),
-                    _x,
-                    ctypes.byref(_Fpv))
-    elif platform.system() == u'Windows':
-        _rp.FPVdll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_p),
-                        _x,
-                        ctypes.byref(_Fpv))
+    
+    _rpfpv_(byref(_t), byref(_D), byref(_p), _x, byref(_Fpv))
+    
     return _prop(x = x, D = D, t = t, p = p, Fpv = _Fpv.value)
 
 
@@ -2385,30 +2212,17 @@ def chempot(t, D, x):
     outputs:
         u--array (1..nc) of the chemical potentials [J/mol].'''
     _inputerrorcheck(locals())
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _t.value = t
     _D.value = D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.chempot_(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        _u,
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.CHEMPOTdll(ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            _x,
-                            _u,
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
+    
+    _rpchempot_(byref(_t), byref(_D), _x, _u, byref(_ierr), byref(_herr),
+                 c_long(255))
+    
     return _prop(x = x, D = D, t = t, ierr = _ierr.value, herr = _herr.value,
-        u = [_u[each] for each in xrange(_nc_rec.record)], defname = defname)
-
+        u = [_u[each] for each in xrange(_nc_rec.record)], defname = u'chempot')
+            
 
 def purefld(icomp=0):
     u'''Change the standard mixture setup so that the properties of one fluid
@@ -2418,48 +2232,34 @@ def purefld(icomp=0):
 
     inputs:
         icomp--fluid number in a mixture to use as a pure fluid'''
-    global _purefld_rec, _nc_rec
+    global _purefld_rec
 
     _inputerrorcheck(locals())
 
     #define setup record for FluidModel
     if icomp != 0:
-        _purefld_rec = _Setuprecord(copy.copy(locals()), u'_purefld_rec')
+        _purefld_rec = _Setuprecord(copy(locals()), u'_purefld_rec')
     else:
         #del record
         if u'_purefld_rec' in _Setuprecord.object_list:
             _purefld_rec = None
 
     _icomp.value = icomp
-    if platform.system() == u'Linux':
-        _rp.purefld_(ctypes.byref(_icomp))
-    elif platform.system() == u'Windows':
-        _rp.PUREFLDdll(ctypes.byref(_icomp))
+    
+    _rppurefld_(byref(_icomp))
 
     return _prop(fixicomp = icomp)
-
-
+            
+          
 def _name(icomp=1):
     _inputerrorcheck(locals())
     _icomp.value = icomp
-    if platform.system() == u'Linux':
-        _rp.name_(ctypes.byref(_icomp),
-                    ctypes.byref(_hname),
-                    ctypes.byref(_hn80),
-                    ctypes.byref(_hcas),
-                    ctypes.c_long(12),
-                    ctypes.c_long(80),
-                    ctypes.c_long(12))
-    elif platform.system() == u'Windows':
-        _rp.NAMEdll(ctypes.byref(_icomp),
-                    ctypes.byref(_hname),
-                    ctypes.byref(_hn80),
-                    ctypes.byref(_hcas),
-                    ctypes.c_long(12),
-                    ctypes.c_long(80),
-                    ctypes.c_long(12))
-    return _hname.value.decode(u'utf-8').strip().upper()
-
+    
+    _rpname_(byref(_icomp), byref(_hname), byref(_hn80), byref(_hcas),
+             c_long(12), c_long(80), c_long(12))
+    
+    return _hname.value.decode(u'utf-8').strip().upper()  
+            
 
 def name(icomp=1):
     u'''Provides name information for specified component
@@ -2472,27 +2272,15 @@ def name(icomp=1):
         hcas--CAS (Chemical Abstracts Service) number [character*12]'''
     _inputerrorcheck(locals())
     _icomp.value = icomp
-    if platform.system() == u'Linux':
-        _rp.name_(ctypes.byref(_icomp),
-                    ctypes.byref(_hname),
-                    ctypes.byref(_hn80),
-                    ctypes.byref(_hcas),
-                    ctypes.c_long(12),
-                    ctypes.c_long(80),
-                    ctypes.c_long(12))
-    elif platform.system() == u'Windows':
-        _rp.NAMEdll(ctypes.byref(_icomp),
-                    ctypes.byref(_hname),
-                    ctypes.byref(_hn80),
-                    ctypes.byref(_hcas),
-                    ctypes.c_long(12),
-                    ctypes.c_long(80),
-                    ctypes.c_long(12))
+
+    _rpname_(byref(_icomp), byref(_hname), byref(_hn80), byref(_hcas),
+             c_long(12), c_long(80), c_long(12))
+    
     return _prop(icomp = icomp,
                         hname = _hname.value.decode(u'utf-8').strip().upper(),
                         hn80 = _hn80.value.decode(u'utf-8').strip().upper(),
                         hcas = _hcas.value.decode(u'utf-8').strip().upper())
-
+                        
 
 def entro(t, D, x):
     u'''Compute entropy as a function of temperature, density and composition
@@ -2511,18 +2299,11 @@ def entro(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.entro_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_s))
-    elif platform.system() == u'Windows':
-        _rp.ENTROdll(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_s))
+    
+    _rpentro_(byref(_t), byref(_D), _x, byref(_s))
+    
     return _prop(x = x, D = D, t = t, s = _s.value)
-
+        
 
 def enthal(t, D, x):
     u'''Compute enthalpy as a function of temperature, density, and
@@ -2541,16 +2322,9 @@ def enthal(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.enthal_(ctypes.byref(_t),
-                     ctypes.byref(_D),
-                     _x,
-                     ctypes.byref(_h))
-    elif platform.system() == u'Windows':
-        _rp.ENTHALdll(ctypes.byref(_t),
-                     ctypes.byref(_D),
-                     _x,
-                     ctypes.byref(_h))
+
+    _rpenthal_(byref(_t), byref(_D), _x, byref(_h))
+    
     return _prop(x = x, D = D, t = t, h = _h.value)
 
 
@@ -2572,18 +2346,9 @@ def cvcp(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.cvcp_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_cv),
-                    ctypes.byref(_cp))
-    elif platform.system() == u'Windows':
-        _rp.CVCPdll(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_cv),
-                    ctypes.byref(_cp))
+    
+    _rpcvcp_(byref(_t), byref(_D), _x, byref(_cv), byref(_cp))
+    
     return _prop(x = x, D = D, t = t, cv = _cv.value, cp = _cp.value)
 
 
@@ -2603,18 +2368,9 @@ def cvcpk(icomp, t, D):
         cp--isobaric heat capacity [J/mol-K]'''
     _inputerrorcheck(locals())
     _icomp.value, _t.value, _D.value = icomp, t, D
-    if platform.system() == u'Linux':
-        _rp.cvcpk_(ctypes.byref(_icomp),
-                    ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    ctypes.byref(_cv),
-                    ctypes.byref(_cp))
-    elif platform.system() == u'Windows':
-        _rp.CVCPKdll(ctypes.byref(_icomp),
-                    ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    ctypes.byref(_cv),
-                    ctypes.byref(_cp))
+    
+    _rpcvcpk_(byref(_icomp), byref(_t), byref(_D), byref(_cv), byref(_cp))
+    
     return _prop(icomp = icomp, D = D, t = t, cv = _cv.value, cp = _cp.value)
 
 
@@ -2646,18 +2402,9 @@ def gibbs(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.gibbs_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_Ar),
-                    ctypes.byref(_Gr))
-    elif platform.system() == u'Windows':
-        _rp.GIBBSdll(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_Ar),
-                    ctypes.byref(_Gr))
+    
+    _rpgibbs_(byref(_t), byref(_D), _x, byref(_Ar), byref(_Gr))
+
     return _prop(x = x, D = D, t = t, Ar = _Ar.value, Gr = _Gr.value)
 
 
@@ -2677,20 +2424,11 @@ def ag(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.ag_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_A),
-                    ctypes.byref(_G))
-    elif platform.system() == u'Windows':
-        _rp.AGdll(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_A),
-                    ctypes.byref(_G))
+    
+    _rpag_(byref(_t), byref(_D), _x, byref(_A), byref(_G))
+    
     return _prop(x = x, D = D, t = t, A = _A.value, G = _G.value)
-
+        
 
 def press(t, D, x):
     u'''Compute pressure as a function of temperature, density, and
@@ -2707,16 +2445,9 @@ def press(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.press_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_p))
-    elif platform.system() == u'Windows':
-        _rp.PRESSdll(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_p))
+    
+    _rppress_(byref(_t), byref(_D), _x, byref(_p))
+
     return _prop(x = x, D = D, t = t, p = _p.value)
 
 
@@ -2733,19 +2464,12 @@ def dpdd(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.dpdd_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_dpdD))
-    elif platform.system() == u'Windows':
-        _rp.DPDDdll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_dpdD))
+    
+    _rpdpdd_(byref(_t), byref(_D), _x, byref(_dpdD))
+    
     return _prop(x = x, D = D, t = t, dpdD = _dpdD.value)
-
-
+        
+        
 def dpddk(icomp, t, D):
     u'''Compute partial derivative of pressure w.r.t. density at constant
     temperature as a function of temperature and density for a specified
@@ -2762,19 +2486,12 @@ def dpddk(icomp, t, D):
         dpdD--dP/dD [kPa-L/mol]'''
     _inputerrorcheck(locals())
     _icomp.value, _t.value, _D.value = icomp, t, D
-    if platform.system() == u'Linux':
-        _rp.dpddk_(ctypes.byref(_icomp),
-                    ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    ctypes.byref(_dpdD))
-    elif platform.system() == u'Windows':
-        _rp.DPDDKdll(ctypes.byref(_icomp),
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_dpdD))
+    
+    _rpdpddk_(byref(_icomp), byref(_t), byref(_D), byref(_dpdD))
+    
     return _prop(icomp = icomp, D = D, t = t, cv = _dpdD.value)
-
-
+        
+        
 def dpdd2(t, D, x):
     u'''Compute second partial derivative of pressure w.r.t. density at
     const. temperature as a function of temperature, density, and
@@ -2789,16 +2506,9 @@ def dpdd2(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.dpdd2_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_d2pdD2))
-    elif platform.system() == u'Windows':
-        _rp.DPDD2dll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_d2pdD2))
+    
+    _rpdpdd2_(byref(_t), byref(_D), _x, byref(_d2pdD2))
+    
     return _prop(x = x, D = D, t = t, d2pdD2 = _d2pdD2.value)
 
 
@@ -2815,18 +2525,11 @@ def dpdt(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.dpdt_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_dpdt))
-    elif platform.system() == u'Windows':
-        _rp.DPDTdll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_dpdt))
-    return _prop(x = x, D = D, t = t, dpt = _dpdt.value)
 
+    _rpdpdt_(byref(_t), byref(_D), _x, byref(_dpdt))
+    
+    return _prop(x = x, D = D, t = t, dpt = _dpdt.value)
+        
 
 def dpdtk(icomp, t, D):
     u'''Compute partial derivative of pressure w.r.t. temperature at constant
@@ -2844,19 +2547,12 @@ def dpdtk(icomp, t, D):
         dpdt--dP/dT [kPa/K]'''
     _inputerrorcheck(locals())
     _icomp.value, _t.value, _D.value = icomp, t, D
-    if platform.system() == u'Linux':
-        _rp.dpdtk_(ctypes.byref(_icomp),
-                    ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    ctypes.byref(_dpdt))
-    elif platform.system() == u'Windows':
-        _rp.DPDTKdll(ctypes.byref(_icomp),
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_dpdt))
+
+    _rpdpdtk_(byref(_icomp), byref(_t), byref(_D), byref(_dpdt))
+    
     return _prop(icomp = icomp, D = D, t = t, dpdt = _dpdt.value)
-
-
+    
+        
 def dddp(t, D, x):
     u'''ompute partial derivative of density w.r.t. pressure at constant
     temperature as a function of temperature, density, and composition.
@@ -2870,18 +2566,11 @@ def dddp(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.dddp_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_dDdp))
-    elif platform.system() == u'Windows':
-        _rp.DDDPdll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_dDdp))
-    return _prop(x = x, D = D, t = t, dDdp = _dDdp.value)
+    
+    _rpdddp_(byref(_t), byref(_D), _x, byref(_dDdp))
 
+    return _prop(x = x, D = D, t = t, dDdp = _dDdp.value)
+        
 
 def dddt(t, D, x):
     u'''Compute partial derivative of density w.r.t. temperature at constant
@@ -2897,19 +2586,12 @@ def dddt(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.dddt_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_dDdt))
-    elif platform.system() == u'Windows':
-        _rp.DDDTdll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_dDdt))
+    
+    _rpdddt_(byref(_t), byref(_D), _x, byref(_dDdt))
+    
     return _prop(x = x, D = D, t = t, dDdt = _dDdt.value)
-
-
+    
+        
 def dcdt(t, x):
     u'''Compute the 1st derivative of C (C is the third virial coefficient) with
     respect to T as a function of temperature and composition.
@@ -2922,18 +2604,12 @@ def dcdt(t, x):
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.dcdt_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_dct))
-    elif platform.system() == u'Windows':
-        raise RefproproutineError(u'routine "dcdt" unsupported in Windows')
-        #~ _rp.DCDTdll(ctypes.byref(_t),
-                        #~ _x,
-                        #~ ctypes.byref(_dct))
+    
+    _rpdcdt_(byref(_t), _x, byref(_dct))
+    
     return _prop(x = x, t = t, dct = _dct.value)
-
-
+        
+        
 def dcdt2(t, x):
     u'''Compute the 2nd derivative of C (C is the third virial coefficient) with
     respect to T as a function of temperature and composition.
@@ -2946,18 +2622,12 @@ def dcdt2(t, x):
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.dcdt2_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_dct2))
-    elif platform.system() == u'Windows':
-        raise RefproproutineError(u'routine "dcdt2" unsupported in Windows')
-        #~ _rp.DCDT2dll(ctypes.byref(_t),
-                        #~ _x,
-                        #~ ctypes.byref(_dct))
+    
+    _rpdcdt2_(byref(_t), _x, byref(_dct2))
+    
     return _prop(x = x, t = t, dct2 = _dct2.value)
-
-
+        
+        
 def dhd1(t, D, x):
     u'''Compute partial derivatives of enthalpy w.r.t. t, p, or D at constant
     t, p, or D as a function of temperature, density, and composition
@@ -2976,31 +2646,15 @@ def dhd1(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.dhd1_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_dhdt_D),
-                    ctypes.byref(_dhdt_p),
-                    ctypes.byref(_dhdD_t),
-                    ctypes.byref(_dhdD_p),
-                    ctypes.byref(_dhdp_t),
-                    ctypes.byref(_dhdp_D))
-    elif platform.system() == u'Windows':
-        _rp.DHD1dll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_dhdt_D),
-                        ctypes.byref(_dhdt_p),
-                        ctypes.byref(_dhdD_t),
-                        ctypes.byref(_dhdD_p),
-                        ctypes.byref(_dhdp_t),
-                        ctypes.byref(_dhdp_D))
+
+    _rpdhd1_(byref(_t), byref(_D), _x, byref(_dhdt_D), byref(_dhdt_p),
+              byref(_dhdD_t), byref(_dhdD_p), byref(_dhdp_t), byref(_dhdp_D))
+    
     return _prop(x = x, D = D, t = t, dhdt_D = _dhdt_D.value,
         dhdt_p = _dhdt_p.value, dhdD_t = _dhdD_t.value, dhdD_p = _dhdD_p.value,
         dhdp_t = _dhdp_t.value, dhdtp_D = _dhdp_D.value)
-
-
+        
+            
 def fgcty(t, D, x):
     u'''Compute fugacity for each of the nc components of a mixture by
     numerical differentiation (using central differences) of the
@@ -3018,16 +2672,9 @@ def fgcty(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.fgcty_(ctypes.byref(_t),
-                    ctypes.byref(_D),
-                    _x,
-                    _f)
-    elif platform.system() == u'Windows':
-        _rp.FGCTYdll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        _f)
+
+    _rpfgcty_(byref(_t), byref(_D), _x, _f)
+
     return _prop(x = x, D = D, t = t,
                         f = [_f[each] for each in xrange(_nc_rec.record)])
 
@@ -3052,18 +2699,11 @@ def fgcty2(t, D, x):
     #~ _inputerrorcheck(locals())
     #~ _t.value, _D.value = t, D
     #~ for each in range(len(x)): _x[each] = x[each]
-    #~ if platform.system() == 'Linux':
-        #~ _rp.fgcty2_(ctypes.byref(_t),
-                        #~ ctypes.byref(_D),
-                        #~ _x,
-                        #~ _f)
-    #~ elif platform.system() == 'Windows':
-        #~ _rp.FGCTY2dll(ctypes.byref(_t),
-                        #~ ctypes.byref(_D),
-                        #~ _x,
-                        #~ _f)
-    #~ return _prop(x = x, D = D, t = t, f = [_f[each] for each in range(_nc_rec.record)])
+    #~
+    #~ raise RefproproutineError('function "fgcty2" unsupported in Linux')
 
+    #~ return _prop(x = x, D = D, t = t, f = [_f[each] for each in range(_nc_rec.record)])
+    
 
 def fugcof(t, D, x):
     u'''Compute the fugacity coefficient for each of the nc components of a
@@ -3076,31 +2716,18 @@ def fugcof(t, D, x):
     outputs:
         f--array (1..nc) of the fugacity coefficients'''
     _inputerrorcheck(locals())
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.fugcof_(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        _f,
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.FUGCOFdll(ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            _x,
-                            _f,
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
+
+    _rpfugcof_(byref(_t), byref(_D), _x, _f, byref(_ierr), byref(_herr),
+               c_long(255))
+
     return _prop(x = x, D = D, t = t,
                     f = [_f[each] for each in xrange(_nc_rec.record)],
-                    ierr = _ierr.value, herr = _herr.value, defname = defname)
-
-
+                    ierr = _ierr.value, herr = _herr.value, defname = u'fugcof')
+                        
+                        
 def dbdt(t, x):
     u'''Compute the 2nd derivative of B (B is the second virial coefficient)
     with respect to T as a function of temperature and composition.
@@ -3113,16 +2740,11 @@ def dbdt(t, x):
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.dbdt_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_dbt))
-    elif platform.system() == u'Windows':
-        _rp.DBDTdll(ctypes.byref(_t),
-                        _x,
-                        ctypes.byref(_dbt))
-    return _prop(x = x, t = t, dbt = _dbt.value)
 
+    _rpdbdt_(byref(_t), _x, byref(_dbt))
+    
+    return _prop(x = x, t = t, dbt = _dbt.value)
+    
 
 def virb(t, x):
     u'''Compute second virial coefficient as a function of temperature and
@@ -3136,16 +2758,11 @@ def virb(t, x):
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.virb_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_b))
-    elif platform.system() == u'Windows':
-        _rp.VIRBdll(ctypes.byref(_t),
-                        _x,
-                        ctypes.byref(_b))
-    return _prop(x = x, t = t, b = _b.value)
 
+    _rpvirb_(byref(_t), _x, byref(_b))
+
+    return _prop(x = x, t = t, b = _b.value)
+        
 
 def virc(t, x):
     u'''Compute the third virial coefficient as a function of temperature and
@@ -3159,17 +2776,12 @@ def virc(t, x):
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.virc_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_c))
-    elif platform.system() == u'Windows':
-        _rp.VIRCdll(ctypes.byref(_t),
-                        _x,
-                        ctypes.byref(_c))
+
+    _rpvirc_(byref(_t), _x, byref(_c))
+
     return _prop(x = x, t = t, c = _c.value)
-
-
+    
+        
 def vird(t, x):
     u'''Compute the fourth virial coefficient as a function of temperature
     and composition.
@@ -3184,17 +2796,11 @@ def vird(t, x):
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.vird_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_d))
-    elif platform.system() == u'Windows':
-        raise RefproproutineError(u'routine "vird" unsupported in Windows')
-        #_rp.VIRDdll(ctypes.byref(_t),
-                        #_x,
-                        #ctypes.byref(_d))
-    return _prop(x = x, t = t, d = _d.value)
 
+    _rpvird_(byref(_t), _x, byref(_d))
+
+    return _prop(x = x, t = t, d = _d.value)
+    
 
 def virba (t, x):
     u'''Compute second acoustic virial coefficient as a function of temperature
@@ -3208,14 +2814,9 @@ def virba (t, x):
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.virba_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_ba))
-    elif platform.system() == u'Windows':
-        _rp.VIRBAdll(ctypes.byref(_t),
-                        _x,
-                        ctypes.byref(_ba))
+    
+    _rpvirba_(byref(_t), _x, byref(_ba))
+    
     return _prop(x = x, t = t, ba = _ba.value)
 
 
@@ -3231,17 +2832,12 @@ def virca(t, x):
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.virca_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_ca))
-    elif platform.system() == u'Windows':
-        _rp.VIRCAdll(ctypes.byref(_t),
-                        _x,
-                        ctypes.byref(_ca))
+    
+    _rpvirca_(byref(_t), _x, byref(_ca))
+    
     return _prop(x = x, t = t, ca = _ca.value)
-
-
+    
+    
 def satt(t, x, kph=2):
     u'''Iterate for saturated liquid and vapor states given temperature and
     the composition of one phase
@@ -3263,37 +2859,14 @@ def satt(t, x, kph=2):
             Dliq, and once with kph=2 to get pvap and Dvap.
         xliq--liquid phase composition [array of mol frac]
         xvap--vapor phase composition [array of mol frac]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _t.value, _kph.value = t, kph
     for each in xrange(len(x)): _x[each] = x[each]
 
-    #_purefld_rec.record['icomp']
-    if platform.system() == u'Linux':
-        _rp.satt_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_kph),
-                    ctypes.byref(_p),
-                    ctypes.byref(_Dliq),
-                    ctypes.byref(_Dvap),
-                    _xliq,
-                    _xvap,
-                    ctypes.byref(_ierr),
-                    ctypes.byref(_herr),
-                    ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SATTdll(ctypes.byref(_t),
-                        _x,
-                        ctypes.byref(_kph),
-                        ctypes.byref(_p),
-                        ctypes.byref(_Dliq),
-                        ctypes.byref(_Dvap),
-                        _xliq,
-                        _xvap,
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    _rpsatt_(byref(_t), _x, byref(_kph), byref(_p), byref(_Dliq),
+             byref(_Dvap), _xliq, _xvap, byref(_ierr), byref(_herr), c_long(255))
+
     xliq = normalize([_xliq[each] for each in xrange(_nc_rec.record)])[u'x']
     xvap = normalize([_xvap[each] for each in xrange(_nc_rec.record)])[u'x']
     if u'_purefld_rec' in _Setuprecord.object_list \
@@ -3310,7 +2883,7 @@ def satt(t, x, kph=2):
             xvap = [xvap[_purefld_rec.record[u'icomp'] - 1]]
     return _prop(t = t, x = x, kph = kph, p = _p.value, Dliq = _Dliq.value,
             Dvap = _Dvap.value, xliq = xliq, xvap = xvap, ierr = _ierr.value,
-            herr = _herr.value, defname = defname)
+            herr = _herr.value, defname = u'satt')
 
 
 def satp(p, x, kph=2):
@@ -3334,35 +2907,14 @@ def satp(p, x, kph=2):
             Dliq, and once with kph=2 to get tvap and Dvap.
         xliq--liquid phase composition [array of mol frac]
         xvap--vapor phase composition [array of mol frac]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _p.value, _kph.value = p, kph
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.satp_(ctypes.byref(_p),
-                    _x,
-                    ctypes.byref(_kph),
-                    ctypes.byref(_t),
-                    ctypes.byref(_Dliq),
-                    ctypes.byref(_Dvap),
-                    _xliq,
-                    _xvap,
-                    ctypes.byref(_ierr),
-                    ctypes.byref(_herr),
-                    ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SATPdll(ctypes.byref(_p),
-                        _x,
-                        ctypes.byref(_kph),
-                        ctypes.byref(_t),
-                        ctypes.byref(_Dliq),
-                        ctypes.byref(_Dvap),
-                        _xliq,
-                        _xvap,
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    
+    _rpsatp_(byref(_p), _x, byref(_kph), byref(_t), byref(_Dliq),
+              byref(_Dvap), _xliq, _xvap, byref(_ierr), byref(_herr), c_long(255))
+
     xliq = normalize([_xliq[each] for each in xrange(_nc_rec.record)])[u'x']
     xvap = normalize([_xvap[each] for each in xrange(_nc_rec.record)])[u'x']
     if u'_purefld_rec' in _Setuprecord.object_list \
@@ -3373,7 +2925,7 @@ def satp(p, x, kph=2):
             xvap = [xvap[_purefld_rec.record[u'icomp'] - 1]]
     return _prop(p = p, x = x, kph = kph, t = _t.value, Dliq = _Dliq.value,
             Dvap = _Dvap.value, xliq = xliq, xvap = xvap, ierr = _ierr.value,
-            herr = _herr.value, defname = defname)
+            herr = _herr.value, defname = u'satp')
 
 
 def satd(D, x, kph=2):
@@ -3405,40 +2957,16 @@ def satd(D, x, kph=2):
     either (Dliq, xliq) or (Dvap, xvap) will correspond to the input state
     with the other pair corresponding to the other phase in equilibrium with
     the input state'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _D.value, _kph.value = D, kph
     for each in xrange(len(x)):
         _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.satd_(ctypes.byref(_D),
-                    _x,
-                    ctypes.byref(_kph),
-                    ctypes.byref(_kr),
-                    ctypes.byref(_t),
-                    ctypes.byref(_p),
-                    ctypes.byref(_Dliq),
-                    ctypes.byref(_Dvap),
-                    _xliq,
-                    _xvap,
-                    ctypes.byref(_ierr),
-                    ctypes.byref(_herr),
-                    ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SATDdll(ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_kph),
-                        ctypes.byref(_kr),
-                        ctypes.byref(_t),
-                        ctypes.byref(_p),
-                        ctypes.byref(_Dliq),
-                        ctypes.byref(_Dvap),
-                        _xliq,
-                        _xvap,
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+
+    _rpsatd_(byref(_D), _x, byref(_kph), byref(_kr), byref(_t), byref(_p),
+              byref(_Dliq), byref(_Dvap), _xliq, _xvap, byref(_ierr),
+              byref(_herr), c_long(255))
+
     xliq = normalize([_xliq[each] for each in xrange(_nc_rec.record)])[u'x']
     xvap = normalize([_xvap[each] for each in xrange(_nc_rec.record)])[u'x']
     if u'_purefld_rec' in _Setuprecord.object_list \
@@ -3449,7 +2977,7 @@ def satd(D, x, kph=2):
             xvap = [xvap[_purefld_rec.record[u'icomp'] - 1]]
     return _prop(D = D, x = x, kph = kph, kr = _kr.value, t = _t.value,
         p = _p.value, Dliq = _Dliq.value, Dvap = _Dvap.value, xliq = xliq,
-        xvap = xvap, ierr = _ierr.value, herr = _herr.value, defname = defname)
+        xvap = xvap, ierr = _ierr.value, herr = _herr.value, defname = u'satd')
 
 
 def sath(h, x, kph=2):
@@ -3484,48 +3012,20 @@ def sath(h, x, kph=2):
     (k1=1, k2=2).
 
     N.B. kph = 3,4 presently working only for pure components'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _h.value, _kph.value = h, kph
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.sath_(ctypes.byref(_h),
-                    _x,
-                    ctypes.byref(_kph),
-                    ctypes.byref(_nroot),
-                    ctypes.byref(_k1),
-                    ctypes.byref(_t1),
-                    ctypes.byref(_p1),
-                    ctypes.byref(_D1),
-                    ctypes.byref(_k2),
-                    ctypes.byref(_t2),
-                    ctypes.byref(_p2),
-                    ctypes.byref(_D2),
-                    ctypes.byref(_ierr),
-                    ctypes.byref(_herr),
-                    ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SATHdll(ctypes.byref(_h),
-                        _x,
-                        ctypes.byref(_kph),
-                        ctypes.byref(_nroot),
-                        ctypes.byref(_k1),
-                        ctypes.byref(_t1),
-                        ctypes.byref(_p1),
-                        ctypes.byref(_D1),
-                        ctypes.byref(_k2),
-                        ctypes.byref(_t2),
-                        ctypes.byref(_p2),
-                        ctypes.byref(_D2),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    
+    _rpsath_(byref(_h), _x, byref(_kph), byref(_nroot), byref(_k1),
+              byref(_t1), byref(_p1), byref(_D1), byref(_k2), byref(_t2),
+              byref(_p2), byref(_D2), byref(_ierr), byref(_herr), c_long(255))
+    
     return _prop(h = h, x = x, kph = kph, nroot = _nroot.value, k1 = _k1.value,
             t1 = _t1.value, p1 = _p1.value, D1 = _D1.value, k2 = _k2.value,
             t2 = _t2.value, p2 = _p2.value, D2 = _D2.value, ierr = _ierr.value,
-            herr = _herr.value, defname = defname)
-
+            herr = _herr.value, defname = u'sath')
+            
 
 def sate(e, x, kph=2):
     u'''Iterate for temperature, pressure, and density given energy along the
@@ -3559,49 +3059,21 @@ def sate(e, x, kph=2):
     (k1=1, k2=2).
 
     N.B. kph = 3,4 presently working only for pure components'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _e.value, _kph.value = e, kph
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.sate_(ctypes.byref(_e),
-                _x,
-                ctypes.byref(_kph),
-                ctypes.byref(_nroot),
-                ctypes.byref(_k1),
-                ctypes.byref(_t1),
-                ctypes.byref(_p1),
-                ctypes.byref(_D1),
-                ctypes.byref(_k2),
-                ctypes.byref(_t2),
-                ctypes.byref(_p2),
-                ctypes.byref(_D2),
-                ctypes.byref(_ierr),
-                ctypes.byref(_herr),
-                ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SATEdll(ctypes.byref(_e),
-                _x,
-                ctypes.byref(_kph),
-                ctypes.byref(_nroot),
-                ctypes.byref(_k1),
-                ctypes.byref(_t1),
-                ctypes.byref(_p1),
-                ctypes.byref(_D1),
-                ctypes.byref(_k2),
-                ctypes.byref(_t2),
-                ctypes.byref(_p2),
-                ctypes.byref(_D2),
-                ctypes.byref(_ierr),
-                ctypes.byref(_herr),
-                ctypes.c_long(255))
+    
+    _rpsate_(byref(_e), _x, byref(_kph), byref(_nroot), byref(_k1),
+              byref(_t1), byref(_p1), byref(_D1),byref(_k2), byref(_t2),
+              byref(_p2), byref(_D2), byref(_ierr), byref(_herr), c_long(255))
+
     return _prop(e = e, x = x, kph = kph, nroot = _nroot.value, k1 = _k1.value,
             t1 = _t1.value, p1 = _p1.value, D1 = _D1.value, k2 = _k2.value,
             t2 = _t2.value, p2 = _p2.value, D2 = _D2.value, ierr = _ierr.value,
-            herr = _herr.value, defname = defname)
-
-
+            herr = _herr.value, defname = u'sate')
+                
+                
 def sats(s, x, kph=2):
     u'''Iterate for temperature, pressure, and density given entropy along
     the saturation boundary and the composition.
@@ -3646,58 +3118,23 @@ def sats(s, x, kph=2):
     placed in k1,t1,p1,d1.
 
     N.B. kph = 3,4 presently working only for pure components'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _s.value, _kph.value = s, kph
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.sats_(ctypes.byref(_s),
-                    _x,
-                    ctypes.byref(_kph),
-                    ctypes.byref(_nroot),
-                    ctypes.byref(_k1),
-                    ctypes.byref(_t1),
-                    ctypes.byref(_p1),
-                    ctypes.byref(_D1),
-                    ctypes.byref(_k2),
-                    ctypes.byref(_t2),
-                    ctypes.byref(_p2),
-                    ctypes.byref(_D2),
-                    ctypes.byref(_k3),
-                    ctypes.byref(_t3),
-                    ctypes.byref(_p3),
-                    ctypes.byref(_D3),
-                    ctypes.byref(_ierr),
-                    ctypes.byref(_herr),
-                    ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SATSdll(ctypes.byref(_s),
-                        _x,
-                        ctypes.byref(_kph),
-                        ctypes.byref(_nroot),
-                        ctypes.byref(_k1),
-                        ctypes.byref(_t1),
-                        ctypes.byref(_p1),
-                        ctypes.byref(_D1),
-                        ctypes.byref(_k2),
-                        ctypes.byref(_t2),
-                        ctypes.byref(_p2),
-                        ctypes.byref(_D2),
-                        ctypes.byref(_k3),
-                        ctypes.byref(_t3),
-                        ctypes.byref(_p3),
-                        ctypes.byref(_D3),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+
+    _rpsats_(byref(_s), _x, byref(_kph), byref(_nroot), byref(_k1),
+              byref(_t1), byref(_p1), byref(_D1), byref(_k2), byref(_t2),
+              byref(_p2), byref(_D2), byref(_k3), byref(_t3), byref(_p3),
+              byref(_D3), byref(_ierr), byref(_herr), c_long(255))
+
     return _prop(s = s, x = x, kph = kph, nroot = _nroot.value, k1 = _k1.value,
             t1 = _t1.value, p1 = _p1.value, D1 = _D1.value, k2 = _k2.value,
             t2 = _t2.value, p2 = _p2.value, D2 = _D2.value, k3 = _k3.value,
             t3 = _t3.value, p3 = _p3.value, D3 = _D3.value, ierr = _ierr.value,
-            herr = _herr.value, defname = defname)
-
-
+            herr = _herr.value, defname = u'sats')
+               
+               
 def csatk(icomp, t, kph=2):
     u'''Compute the heat capacity along the saturation line as a function of
     temperature for a given component
@@ -3717,34 +3154,17 @@ def csatk(icomp, t, kph=2):
         p--saturation pressure [kPa]
         D--saturation molar density [mol/L]
         csat--saturation heat capacity [J/mol-K]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _icomp.value, _t.value, _kph.value = icomp, t, kph
-    if platform.system() == u'Linux':
-        _rp.csatk_(ctypes.byref(_icomp),
-                    ctypes.byref(_t),
-                    ctypes.byref(_kph),
-                    ctypes.byref(_p),
-                    ctypes.byref(_D),
-                    ctypes.byref(_csat),
-                    ctypes.byref(_ierr),
-                    ctypes.byref(_herr),
-                    ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.CSATKdll(ctypes.byref(_icomp),
-                        ctypes.byref(_t),
-                        ctypes.byref(_kph),
-                        ctypes.byref(_p),
-                        ctypes.byref(_D),
-                        ctypes.byref(_csat),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+
+    _rpcsatk_(byref(_icomp), byref(_t), byref(_kph), byref(_p), byref(_D),
+               byref(_csat), byref(_ierr), byref(_herr), c_long(255))
+
     return _prop(icomp = icomp, t = t, kph = kph, p = _p.value, D = _D.value,
             csat = _csat.value, ierr = _ierr.value, herr = _herr.value,
-            defname = defname)
-
+            defname = u'csatk')
+            
 
 def dptsatk(icomp, t, kph=2):
     u'''Compute the heat capacity and dP/dT along the saturation line as a
@@ -3766,37 +3186,19 @@ def dptsatk(icomp, t, kph=2):
             (this is not dp/dt "at" the saturation line for the single phase
             state, but the change in saturated vapor pressure as the
             saturation temperature changes.)'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _icomp.value, _t.value, _kph.value = icomp, t, kph
-    if platform.system() == u'Linux':
-        _rp.dptsatk_(ctypes.byref(_icomp),
-                        ctypes.byref(_t),
-                        ctypes.byref(_kph),
-                        ctypes.byref(_p),
-                        ctypes.byref(_D),
-                        ctypes.byref(_csat),
-                        ctypes.byref(_dpdt),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.DPTSATKdll(ctypes.byref(_icomp),
-                            ctypes.byref(_t),
-                            ctypes.byref(_kph),
-                            ctypes.byref(_p),
-                            ctypes.byref(_D),
-                            ctypes.byref(_csat),
-                            ctypes.byref(_dpdt),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
+
+    _rpdptsatk_(byref(_icomp), byref(_t), byref(_kph), byref(_p),
+                 byref(_D), byref(_csat), byref(_dpdt), byref(_ierr),
+                 byref(_herr), c_long(255))
+
     return _prop(icomp = icomp, t = t, kph = kph, p = _p.value, D = _D.value,
             csat = _csat.value, dpdt = _dpdt.value, ierr = _ierr.value,
-            herr = _herr.value, defname = defname)
-
-
+            herr = _herr.value, defname = u'dptsatk')
+            
+            
 def cv2pk(icomp, t, D=0):
     u'''Compute the isochoric heat capacity in the two phase (liquid+vapor)
     region.
@@ -3812,33 +3214,18 @@ def cv2pk(icomp, t, D=0):
             (Although there is already a csat routine in REFPROP, it is also
             returned here. However, the calculation speed is slower than
             csat.)'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _icomp.value, _t.value, _D.value = icomp, t, D
-    if platform.system() == u'Linux':
-        _rp.cv2pk_(ctypes.byref(_icomp),
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_cv2p),
-                        ctypes.byref(_csat),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.CV2PKdll(ctypes.byref(_icomp),
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_cv2p),
-                        ctypes.byref(_csat),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    
+    _rpcv2pk_(byref(_icomp), byref(_t), byref(_D), byref(_cv2p),
+               byref(_csat), byref(_ierr), byref(_herr), c_long(255))
+    
     return _prop(icomp = icomp, t = t, D = D, cv2p = _cv2p.value,
                     csat = _csat.value, ierr = _ierr.value, herr = _herr.value,
-                    defname = defname)
-
-
+                    defname = u'cv2pk')
+                    
+                    
 def tprho(t, p, x, kph=2, kguess=0, D=0):
     u'''Iterate for density as a function of temperature, pressure, and
     composition for a specified phase.
@@ -3870,36 +3257,19 @@ def tprho(t, p, x, kph=2, kguess=0, D=0):
         D--first guess for molar density [mol/L], only if kguess = 1
     outputs:
         D--molar density [mol/L]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _t.value, _p.value, _kph.value = t, p, kph
     _kguess.value, _D.value = kguess, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.tprho_(ctypes.byref(_t),
-                        ctypes.byref(_p),
-                        _x,
-                        ctypes.byref(_kph),
-                        ctypes.byref(_kguess),
-                        ctypes.byref(_D),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.TPRHOdll(ctypes.byref(_t),
-                        ctypes.byref(_p),
-                        _x,
-                        ctypes.byref(_kph),
-                        ctypes.byref(_kguess),
-                        ctypes.byref(_D),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+
+    _rptprho_(byref(_t), byref(_p), _x, byref(_kph), byref(_kguess),
+               byref(_D), byref(_ierr), byref(_herr), c_long(255))
+
     return _prop(t = t, p = p, x = x, kph = kph, kguess = kguess, D = _D.value,
-            ierr = _ierr.value, herr = _herr.value, defname = defname)
-
-
+            ierr = _ierr.value, herr = _herr.value, defname = u'tprho')
+            
+            
 def flsh(routine, var1, var2, x, kph=1):
     u'''Flash calculation given two independent variables and bulk
     composition
@@ -3972,661 +3342,138 @@ def flsh(routine, var1, var2, x, kph=1):
             #same for kph flag which is only applicable for TH, TE and TS
             #Dvap Dliq to remove if single phase
             #xliq xvap to remove if single phase
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _kph.value = kph
     for each in xrange(len(x)): _x[each] = x[each]
     if routine.upper() == u'TP':
         _t.value, _p.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.tpflsh_(ctypes.byref(_t),
-                            ctypes.byref(_p),
-                            _x,
-                            ctypes.byref(_D),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_e),
-                            ctypes.byref(_h),
-                            ctypes.byref(_s),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.TPFLSHdll(ctypes.byref(_t),
-                                ctypes.byref(_p),
-                                _x,
-                                ctypes.byref(_D),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_e),
-                                ctypes.byref(_h),
-                                ctypes.byref(_s),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+        
+        _rptpflsh_(byref(_t), byref(_p), _x, byref(_D), byref(_Dliq),
+                    byref(_Dvap), _xliq, _xvap, byref(_q), byref(_e), byref(_h),
+                    byref(_s), byref(_cv), byref(_cp), byref(_w), byref(_ierr),
+                    byref(_herr), c_long(255))
+
     elif routine.upper() == u'TD':
         _t.value, _D.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.tdflsh_(ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            _x,
-                            ctypes.byref(_p),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_e),
-                            ctypes.byref(_h),
-                            ctypes.byref(_s),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.TDFLSHdll(ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            _x,
-                            ctypes.byref(_p),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_e),
-                            ctypes.byref(_h),
-                            ctypes.byref(_s),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
+
+        _rptdflsh_(byref(_t), byref(_D), _x, byref(_p), byref(_Dliq),
+                    byref(_Dvap), _xliq, _xvap, byref(_q), byref(_e), byref(_h),
+                    byref(_s), byref(_cv), byref(_cp), byref(_w), byref(_ierr),
+                    byref(_herr), c_long(255))
+
     elif routine.upper() == u'TH':
         _t.value, _h.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.thflsh_(ctypes.byref(_t),
-                            ctypes.byref(_h),
-                            _x,
-                            ctypes.byref(_kph),
-                            ctypes.byref(_p),
-                            ctypes.byref(_D),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_e),
-                            ctypes.byref(_s),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.THFLSHdll(ctypes.byref(_t),
-                                ctypes.byref(_h),
-                                _x,
-                                ctypes.byref(_kph),
-                                ctypes.byref(_p),
-                                ctypes.byref(_D),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_e),
-                                ctypes.byref(_s),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+
+        _rpthflsh_(byref(_t), byref(_h), _x, byref(_kph), byref(_p), byref(_D),
+                    byref(_Dliq), byref(_Dvap), _xliq, _xvap, byref(_q),
+                    byref(_e), byref(_s), byref(_cv), byref(_cp), byref(_w),
+                    byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'TS':
         _t.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.tsflsh_(ctypes.byref(_t),
-                            ctypes.byref(_s),
-                            _x,
-                            ctypes.byref(_kph),
-                            ctypes.byref(_p),
-                            ctypes.byref(_D),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_e),
-                            ctypes.byref(_h),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.TSFLSHdll(ctypes.byref(_t),
-                                ctypes.byref(_s),
-                                _x,
-                                ctypes.byref(_kph),
-                                ctypes.byref(_p),
-                                ctypes.byref(_D),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_e),
-                                ctypes.byref(_h),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+
+        _rptsflsh_(byref(_t), byref(_s), _x, byref(_kph), byref(_p), byref(_D),
+                    byref(_Dliq), byref(_Dvap), _xliq, _xvap, byref(_q),
+                    byref(_e), byref(_h), byref(_cv), byref(_cp), byref(_w),
+                    byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'TE':
         _t.value, _e.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.teflsh_(ctypes.byref(_t),
-                            ctypes.byref(_e),
-                            _x,
-                            ctypes.byref(_kph),
-                            ctypes.byref(_p),
-                            ctypes.byref(_D),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_h),
-                            ctypes.byref(_s),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.TEFLSHdll(ctypes.byref(_t),
-                                ctypes.byref(_e),
-                                _x,
-                                ctypes.byref(_kph),
-                                ctypes.byref(_p),
-                                ctypes.byref(_D),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_h),
-                                ctypes.byref(_s),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+
+        _rpteflsh_(byref(_t), byref(_e), _x, byref(_kph), byref(_p), byref(_D),
+                    byref(_Dliq), byref(_Dvap), _xliq, _xvap, byref(_q),
+                    byref(_h), byref(_s), byref(_cv), byref(_cp), byref(_w),
+                    byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'PD':
         _p.value, _D.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.pdflsh_(ctypes.byref(_p),
-                            ctypes.byref(_D),
-                            _x,
-                            ctypes.byref(_t),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_e),
-                            ctypes.byref(_h),
-                            ctypes.byref(_s),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.PDFLSHdll(ctypes.byref(_p),
-                                ctypes.byref(_D),
-                                _x,
-                                ctypes.byref(_t),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_e),
-                                ctypes.byref(_h),
-                                ctypes.byref(_s),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+
+        _rppdflsh_(byref(_p), byref(_D), _x, byref(_t), byref(_Dliq),
+                    byref(_Dvap), _xliq, _xvap, byref(_q), byref(_e), byref(_h),
+                    byref(_s), byref(_cv), byref(_cp), byref(_w), byref(_ierr),
+                    byref(_herr), c_long(255))
+
     elif routine.upper() == u'PH':
         _p.value, _h.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.phflsh_(ctypes.byref(_p),
-                            ctypes.byref(_h),
-                            _x,
-                            ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_e),
-                            ctypes.byref(_s),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.PHFLSHdll(ctypes.byref(_p),
-                                ctypes.byref(_h),
-                                _x,
-                                ctypes.byref(_t),
-                                ctypes.byref(_D),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_e),
-                                ctypes.byref(_s),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+        
+        _rpphflsh_(byref(_p), byref(_h), _x, byref(_t), byref(_D),
+                    byref(_Dliq), byref(_Dvap), _xliq, _xvap, byref(_q),
+                    byref(_e), byref(_s), byref(_cv), byref(_cp), byref(_w),
+                    byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'PS':
         _p.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.psflsh_(ctypes.byref(_p),
-                            ctypes.byref(_s),
-                            _x,
-                            ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_e),
-                            ctypes.byref(_h),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.PSFLSHdll(ctypes.byref(_p),
-                                ctypes.byref(_s),
-                                _x,
-                                ctypes.byref(_t),
-                                ctypes.byref(_D),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_e),
-                                ctypes.byref(_h),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+
+        _rppsflsh_(byref(_p), byref(_s), _x, byref(_t), byref(_D),
+                    byref(_Dliq), byref(_Dvap), _xliq, _xvap, byref(_q),
+                    byref(_e), byref(_h), byref(_cv), byref(_cp), byref(_w),
+                    byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'PE':
         _p.value, _e.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.peflsh_(ctypes.byref(_p),
-                            ctypes.byref(_e),
-                            _x,
-                            ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_h),
-                            ctypes.byref(_s),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.PEFLSHdll(ctypes.byref(_p),
-                                ctypes.byref(_e),
-                                _x,
-                                ctypes.byref(_t),
-                                ctypes.byref(_D),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_h),
-                                ctypes.byref(_s),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+        
+        _rppeflsh_(byref(_p), byref(_e), _x, byref(_t), byref(_D), byref(_Dliq),
+                    byref(_Dvap), _xliq, _xvap, byref(_q), byref(_h), byref(_s),
+                    byref(_cv), byref(_cp), byref(_w), byref(_ierr),
+                    byref(_herr), c_long(255))
+
     elif routine.upper() == u'HS':
         _h.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.hsflsh_(ctypes.byref(_h),
-                            ctypes.byref(_s),
-                            _x,
-                            ctypes.byref(_t),
-                            ctypes.byref(_p),
-                            ctypes.byref(_D),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_e),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.HSFLSHdll(ctypes.byref(_h),
-                                ctypes.byref(_s),
-                                _x,
-                                ctypes.byref(_t),
-                                ctypes.byref(_p),
-                                ctypes.byref(_D),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_e),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+        
+        _rphsflsh_(byref(_h), byref(_s), _x, byref(_t), byref(_p), byref(_D),
+                    byref(_Dliq), byref(_Dvap), _xliq, _xvap, byref(_q), 
+                    byref(_e), byref(_cv), byref(_cp), byref(_w), byref(_ierr),
+                    byref(_herr), c_long(255))
+
     elif routine.upper() == u'ES':
         _e.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.esflsh_(ctypes.byref(_e),
-                            ctypes.byref(_s),
-                            _x,
-                            ctypes.byref(_t),
-                            ctypes.byref(_p),
-                            ctypes.byref(_D),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_h),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.ESFLSHdll(ctypes.byref(_e),
-                                ctypes.byref(_s),
-                                _x,
-                                ctypes.byref(_t),
-                                ctypes.byref(_p),
-                                ctypes.byref(_D),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_h),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+        
+        _rpesflsh_(byref(_e), byref(_s), _x, byref(_t), byref(_p), byref(_D),
+                    byref(_Dliq), byref(_Dvap), _xliq, _xvap, byref(_q),
+                    byref(_h), byref(_cv), byref(_cp), byref(_w), byref(_ierr),
+                    byref(_herr), c_long(255))
+
     elif routine.upper() == u'DH':
         _D.value, _h.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.dhflsh_(ctypes.byref(_D),
-                            ctypes.byref(_h),
-                            _x,
-                            ctypes.byref(_t),
-                            ctypes.byref(_p),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_e),
-                            ctypes.byref(_s),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.DHFLSHdll(ctypes.byref(_D),
-                                ctypes.byref(_h),
-                                _x,
-                                ctypes.byref(_t),
-                                ctypes.byref(_p),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_e),
-                                ctypes.byref(_s),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+        
+        _rpdhflsh_(byref(_D), byref(_h), _x, byref(_t), byref(_p), byref(_Dliq),
+                    byref(_Dvap), _xliq, _xvap, byref(_q), byref(_e), byref(_s),
+                    byref(_cv), byref(_cp), byref(_w), byref(_ierr),
+                    byref(_herr), c_long(255))
+
     elif routine.upper() == u'DS':
         _D.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.dsflsh_(ctypes.byref(_D),
-                            ctypes.byref(_s),
-                            _x,
-                            ctypes.byref(_t),
-                            ctypes.byref(_p),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_e),
-                            ctypes.byref(_h),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.DSFLSHdll(ctypes.byref(_D),
-                                ctypes.byref(_s),
-                                _x,
-                                ctypes.byref(_t),
-                                ctypes.byref(_p),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_e),
-                                ctypes.byref(_h),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+
+        _rpdsflsh_(byref(_D), byref(_s), _x, byref(_t), byref(_p), byref(_Dliq),
+                    byref(_Dvap), _xliq, _xvap, byref(_q), byref(_e), byref(_h),
+                    byref(_cv), byref(_cp), byref(_w), byref(_ierr),
+                    byref(_herr), c_long(255))
+
     elif routine.upper() == u'DE':
         _D.value, _e.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.deflsh_(ctypes.byref(_D),
-                            ctypes.byref(_e),
-                            _x,
-                            ctypes.byref(_t),
-                            ctypes.byref(_p),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_q),
-                            ctypes.byref(_h),
-                            ctypes.byref(_s),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.DEFLSHdll(ctypes.byref(_D),
-                                ctypes.byref(_e),
-                                _x,
-                                ctypes.byref(_t),
-                                ctypes.byref(_p),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_q),
-                                ctypes.byref(_h),
-                                ctypes.byref(_s),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+
+        _rpdeflsh_(byref(_D), byref(_e), _x, byref(_t), byref(_p), byref(_Dliq),
+                    byref(_Dvap), _xliq, _xvap, byref(_q), byref(_h), byref(_s),
+                    byref(_cv), byref(_cp), byref(_w), byref(_ierr),
+                    byref(_herr), c_long(255))
+
     elif routine.upper() == u'TQ':
         _t.value, _q.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.tqflsh_(ctypes.byref(_t),
-                            ctypes.byref(_q),
-                            _x,
-                            ctypes.byref(ctypes.c_long(1)),
-                            ctypes.byref(_p),
-                            ctypes.byref(_D),
-                            ctypes.byref(_Dliq),
-                            ctypes.byref(_Dvap),
-                            _xliq,
-                            _xvap,
-                            ctypes.byref(_e),
-                            ctypes.byref(_h),
-                            ctypes.byref(_s),
-                            ctypes.byref(_cv),
-                            ctypes.byref(_cp),
-                            ctypes.byref(_w),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.TQFLSHdll(ctypes.byref(_t),
-                                ctypes.byref(_q),
-                                _x,
-                                ctypes.byref(ctypes.c_long(1)),
-                                ctypes.byref(_p),
-                                ctypes.byref(_D),
-                                ctypes.byref(_Dliq),
-                                ctypes.byref(_Dvap),
-                                _xliq,
-                                _xvap,
-                                ctypes.byref(_e),
-                                ctypes.byref(_h),
-                                ctypes.byref(_s),
-                                ctypes.byref(_cv),
-                                ctypes.byref(_cp),
-                                ctypes.byref(_w),
-                                ctypes.byref(_ierr),
-                                ctypes.byref(_herr),
-                                ctypes.c_long(255))
+
+        _rptqflsh_(byref(_t), byref(_q), _x, byref(c_long(1)), byref(_p),
+                    byref(_D), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                    byref(_e), byref(_h), byref(_s), byref(_cv), byref(_cp),
+                    byref(_w), byref(_ierr), byref(_herr), c_long(255))
+    
     elif routine.upper() == u'PQ':
         _p.value, _q.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.pqflsh_(ctypes.byref(_p),
-                        ctypes.byref(_q),
-                        _x,
-                        ctypes.byref(ctypes.c_long(1)),
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_Dliq),
-                        ctypes.byref(_Dvap),
-                        _xliq,
-                        _xvap,
-                        ctypes.byref(_e),
-                        ctypes.byref(_h),
-                        ctypes.byref(_s),
-                        ctypes.byref(_cv),
-                        ctypes.byref(_cp),
-                        ctypes.byref(_w),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.PQFLSHdll(ctypes.byref(_p),
-                        ctypes.byref(_q),
-                        _x,
-                        ctypes.byref(ctypes.c_long(1)),
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_Dliq),
-                        ctypes.byref(_Dvap),
-                        _xliq,
-                        _xvap,
-                        ctypes.byref(_e),
-                        ctypes.byref(_h),
-                        ctypes.byref(_s),
-                        ctypes.byref(_cv),
-                        ctypes.byref(_cp),
-                        ctypes.byref(_w),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+
+        _rppqflsh_(byref(_p), byref(_q), _x, byref(c_long(1)), byref(_t),
+                    byref(_D), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                    byref(_e), byref(_h), byref(_s), byref(_cv), byref(_cp),
+                    byref(_w), byref(_ierr), byref(_herr), c_long(255))
+
     else: raise RefpropinputError(u'Incorrect "routine" input, ' + unicode(routine) +
                                             u' is an invalid input')
 
@@ -4642,9 +3489,9 @@ def flsh(routine, var1, var2, x, kph=1):
             D = _D.value, Dliq = _Dliq.value, Dvap = _Dvap.value, xliq = xliq,
             xvap = xvap, e = _e.value, h = _h.value, s = _s.value, cv = _cv.value,
             cp = _cp.value, w = _w.value, ierr = _ierr.value, herr = _herr.value,
-            defname = defname)
-
-
+            defname = u'flsh')
+            
+            
 def flsh1(routine, var1, var2, x, kph=1, Dmin=0, Dmax=0):
     u'''Flash calculation given two independent variables and bulk
     composition
@@ -4685,253 +3532,77 @@ def flsh1(routine, var1, var2, x, kph=1, Dmin=0, Dmax=0):
     outputs:
         t--temperature [K]
         D--overall (bulk) molar density [mol/L]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
+    defname = u'flsh1'
 
     _inputerrorcheck(locals())
     _kph.value, _Dmin.value, _Dmax.value = kph, Dmin, Dmax
     for each in xrange(len(x)): _x[each] = x[each]
     if routine.upper() == u'TH':
         _t.value, _h.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.thfl1_(ctypes.byref(_t),
-                            ctypes.byref(_h),
-                            _x,
-                            ## should add kph
-                            ctypes.byref(_Dmin),
-                            ctypes.byref(_Dmax),
-                            ctypes.byref(_D),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'routine "THFL1" unsupported in Windows')
-                #~ _rp.THFL1dll(ctypes.byref(_t),
-                            #~ ctypes.byref(_h),
-                            #~ _x,
-                            #~ ## should add kph
-                            #~ ctypes.byref(_Dmin),
-                            #~ ctypes.byref(_Dmax),
-                            #~ ctypes.byref(_D),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rpthfl1_(byref(_t), byref(_h), _x, byref(_Dmin), byref(_Dmax),
+                   byref(_D), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'TS':
         _t.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.tsfl1_(ctypes.byref(_t),
-                        ctypes.byref(_s),
-                        _x,
-                        ## should add kph
-                        ctypes.byref(_Dmin),
-                        ctypes.byref(_Dmax),
-                        ctypes.byref(_D),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'routine "TSFL1" unsupported in Windows')
-            #~ _rp.TSFL1dll(ctypes.byref(_t),
-                        #~ ctypes.byref(_s),
-                        #~ _x,
-                        #~ ## should add kph
-                        #~ ctypes.byref(_Dmin),
-                        #~ ctypes.byref(_Dmax),
-                        #~ ctypes.byref(_D),
-                        #~ ctypes.byref(_ierr),
-                        #~ ctypes.byref(_herr),
-                        #~ ctypes.c_long(255))
+
+        _rptsfl1_(byref(_t), byref(_s), _x, byref(_Dmin), byref(_Dmax),
+                   byref(_D), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'TE':
         _t.value, _e.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.tefl1_(ctypes.byref(_t),
-                        ctypes.byref(_e),
-                        _x,
-                        ##should add kph
-                        ctypes.byref(_Dmin),
-                        ctypes.byref(_Dmax),
-                        ctypes.byref(_D),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'routine "TEFL1" unsupported in Windows')
-            #~ #_rp.TEFL1dll(ctypes.byref(_t),
-                        #~ #ctypes.byref(_e),
-                        #~ #_x,
-                        #~ ###should add kph
-                        #~ #ctypes.byref(_Dmin),
-                        #~ #ctypes.byref(_Dmax),
-                        #~ #ctypes.byref(_D),
-                        #~ #ctypes.byref(_ierr),
-                        #~ #ctypes.byref(_herr),
-                        #~ #ctypes.c_long(255))
+        
+        _rptefl1_(byref(_t), byref(_e), _x, byref(_Dmin), byref(_Dmax),
+                   byref(_D), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'PD':
         _p.value, _D.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.pdfl1_(ctypes.byref(_p),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_t),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.PDFL1dll(ctypes.byref(_p),
-                            ctypes.byref(_D),
-                            _x,
-                            ctypes.byref(_t),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
+        
+        _rppdfl1_(byref(_p), byref(_D), _x, byref(_t), byref(_ierr),
+                   byref(_herr), c_long(255))
+
     elif routine.upper() == u'PH':
         _p.value, _h.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.phfl1_(ctypes.byref(_p),
-                        ctypes.byref(_h),
-                        _x,
-                        ctypes.byref(_kph), #why kph
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.PHFL1dll(ctypes.byref(_p),
-                            ctypes.byref(_h),
-                            _x,
-                            ctypes.byref(_kph), #why kph
-                            ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
+        
+        _rpphfl1_(byref(_p), byref(_h), _x, byref(_kph), byref(_t), byref(_D),
+                   byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'PS':
         _p.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.psfl1_(ctypes.byref(_p),
-                        ctypes.byref(_s),
-                        _x,
-                        ctypes.byref(_kph), #why kph
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            _rp.PSFL1dll(ctypes.byref(_p),
-                            ctypes.byref(_s),
-                            _x,
-                            ctypes.byref(_kph), #why kph
-                            ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
+        
+        _rppsfl1_(byref(_p), byref(_s), _x, byref(_kph),  byref(_t), byref(_D),
+                   byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'PE': #wrong value return
         _p.value, _e.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.pefl1_(ctypes.byref(_p),
-                        ctypes.byref(_e),
-                        _x,
-                        ctypes.byref(_kph),
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'routine "PEFL1" unsupported in Windows')
-            _rp.PEFL1dll(ctypes.byref(_p),
-                            ctypes.byref(_e),
-                            _x,
-                            ctypes.byref(_kph),
-                            ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
+        
+        _rppefl1_(byref(_p), byref(_e), _x, byref(_kph), byref(_t), byref(_D),
+                   byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'HS':
         _h.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.hsfl1_(ctypes.byref(_h),
-                            ctypes.byref(_s),
-                            _x,
-                            ctypes.byref(_Dmin),
-                            ctypes.byref(_Dmax),
-                            ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'routine "HSFL1" unsupported in Windows')
-            #~ _rp.HSFL1dll(ctypes.byref(_h),
-                            #~ ctypes.byref(_s),
-                            #~ _x,
-                            #~ ctypes.byref(_Dmin),
-                            #~ ctypes.byref(_Dmax),
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_D),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+
+        _rphsfl1_(byref(_h), byref(_s), _x, byref(_Dmin), byref(_Dmax),
+                   byref(_t), byref(_D), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'DH':
         _D.value, _h.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.dhfl1_(ctypes.byref(_D),
-                        ctypes.byref(_h),
-                        _x,
-                        ctypes.byref(_t),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'routine "DHFL1" unsupported in Windows')
-            #~ _rp.DHFL1dll(ctypes.byref(_D),
-                            #~ ctypes.byref(_h),
-                            #~ _x,
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rpdhfl1_(byref(_D), byref(_h), _x, byref(_t), byref(_ierr),
+                   byref(_herr), c_long(255))
+
     elif routine.upper() == u'DS':
         _D.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.dsfl1_(ctypes.byref(_D),
-                        ctypes.byref(_s),
-                        _x,
-                        ctypes.byref(_t),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'routine "DSFL1" unsupported in Windows')
-            #~ _rp.DSFL1dll(ctypes.byref(_D),
-                            #~ ctypes.byref(_s),
-                            #~ _x,
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+
+        _rpdsfl1_(byref(_D), byref(_s), _x, byref(_t), byref(_ierr),
+                   byref(_herr), c_long(255))
+
     elif routine.upper() == u'DE':
         _D.value, _e.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.defl1_(ctypes.byref(_D),
-                        ctypes.byref(_e),
-                        _x,
-                        ctypes.byref(_t),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'routine "DEFL1" unsupported in Windows')
-            #~ _rp.DEFL1dll(ctypes.byref(_D),
-                        #~ ctypes.byref(_e),
-                        #~ _x,
-                        #~ ctypes.byref(_t),
-                        #~ ctypes.byref(_ierr),
-                        #~ ctypes.byref(_herr),
-                        #~ ctypes.c_long(255))
+        
+        _rpdefl1_(byref(_D), byref(_e), _x, byref(_t), byref(_ierr),
+                   byref(_herr), c_long(255))
+
     else: raise RefpropinputError(u'Incorrect "routine" input, ' + unicode(routine) +
                                             u' is an invalid input')
     if routine.upper() == u'TH':
@@ -4974,8 +3645,7 @@ def flsh1(routine, var1, var2, x, kph=1, Dmin=0, Dmax=0):
     elif routine.upper() == u'DE':
         return _prop(x = x, t = _t.value, D = var1, e = var2, ierr = _ierr.value,
                 herr = _herr.value, defname = defname)
-
-
+                
 def flsh2(routine, var1, var2, x, kq=1, ksat=0, tbub=0, tdew=0, pbub=0, pdew=0,
             Dlbub=0, Dvdew=0, xbub=None, xdew=None):
     u'''Flash calculation given two independent variables and bulk composition
@@ -5071,7 +3741,7 @@ def flsh2(routine, var1, var2, x, kq=1, ksat=0, tbub=0, tdew=0, pbub=0, pdew=0,
             NB only for routine (TH, TS, TE, TD, PD, PH, PS, PE, TQ and PQ)
         xdew--liquid composition [array of mol frac] at dew point
             NB only for routine (TH, TS, TE, TD, PD, PH, PS, PE, TQ and PQ)'''
-    defname = sys._getframe(0).f_code.co_name, locals()
+    defname = u'flsh2'
 
     _inputerrorcheck(locals())
     for each in xrange(len(x)):
@@ -5083,586 +3753,119 @@ def flsh2(routine, var1, var2, x, kq=1, ksat=0, tbub=0, tdew=0, pbub=0, pdew=0,
     _Dlbub.value, _Dvdew.value = Dlbub, Dvdew
     if routine.upper() == u'TP':
         _t.value, _p.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.tpfl2_(ctypes.byref(_t),
-                       ctypes.byref(_p),
-                       _x,
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "TPFL2" unsupported in Windows')
-            #~ _rp.TPFL2dll(ctypes.byref(_t),
-                            #~ ctypes.byref(_p),
-                            #~ _x,
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rptpfl2_(byref(_t), byref(_p), _x, byref(_Dliq), byref(_Dvap), _xliq,
+                   _xvap, byref(_q), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'DH':
         _D.value, _h.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.dhfl2_(ctypes.byref(_D),
-                       ctypes.byref(_h),
-                       _x,
-                       ctypes.byref(_t),
-                       ctypes.byref(_p),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "DHFL2" unsupported in Windows')
-            #~ _rp.DHFL2dll(ctypes.byref(_D),
-                            #~ ctypes.byref(_h),
-                            #~ _x,
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_p),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+
+        _rpdhfl2_(byref(_D), byref(_h), _x, byref(_t), byref(_p), byref(_Dliq),
+                   byref(_Dvap), _xliq, _xvap, byref(_q), byref(_ierr),
+                   byref(_herr), c_long(255))
+
     elif routine.upper() == u'DS':
         _D.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.dsfl2_(ctypes.byref(_D),
-                       ctypes.byref(_s),
-                       _x,
-                       ctypes.byref(_t),
-                       ctypes.byref(_p),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "DSFL2" unsupported in Windows')
-            #~ _rp.DSFL2dll(ctypes.byref(_D),
-                            #~ ctypes.byref(_s),
-                            #~ _x,
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_p),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+
+        _rpdsfl2_(byref(_D), byref(_s), _x, byref(_t), byref(_p), byref(_Dliq),
+                   byref(_Dvap), _xliq, _xvap, byref(_q), byref(_ierr),
+                   byref(_herr), c_long(255))
+
     elif routine.upper() == u'DE':
         _D.value, _e.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.defl2_(ctypes.byref(_D),
-                       ctypes.byref(_e),
-                       _x,
-                       ctypes.byref(_t),
-                       ctypes.byref(_p),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "DEFL2" unsupported in Windows')
-            #~ _rp.DEFL2dll(ctypes.byref(_D),
-                            #~ ctypes.byref(_e),
-                            #~ _x,
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_p),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rpdefl2_(byref(_D), byref(_e), _x, byref(_t), byref(_p), byref(_Dliq),
+                   byref(_Dvap), _xliq, _xvap, byref(_q), byref(_ierr),
+                   byref(_herr), c_long(255))
+
     elif routine.upper() == u'TH':
         _t.value, _h.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.thfl2_(ctypes.byref(_t),
-                       ctypes.byref(_h),
-                       _x,
-                       ctypes.byref(_ksat),
-                       ctypes.byref(_pbub),
-                       ctypes.byref(_pdew),
-                       ctypes.byref(_Dlbub),
-                       ctypes.byref(_Dvdew),
-                       _xbub,
-                       _xdew,
-                       ctypes.byref(_p),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "THFL2" unsupported in Windows')
-            #~ _rp.THFL2dll(ctypes.byref(_t),
-                            #~ ctypes.byref(_h),
-                            #~ _x,
-                            #~ ctypes.byref(_ksat),
-                            #~ ctypes.byref(_pbub),
-                            #~ ctypes.byref(_pdew),
-                            #~ ctypes.byref(_Dlbub),
-                            #~ ctypes.byref(_Dvdew),
-                            #~ _xbub,
-                            #~ _xdew,
-                            #~ ctypes.byref(_p),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rpthfl2_(byref(_t), byref(_h), _x, byref(_ksat), byref(_pbub),
+                   byref(_pdew), byref(_Dlbub), byref(_Dvdew), _xbub, _xdew,
+                   byref(_p), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                   byref(_q), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'TS':
         _t.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.tsfl2_(ctypes.byref(_t),
-                       ctypes.byref(_s),
-                       _x,
-                       ctypes.byref(_ksat),
-                       ctypes.byref(_pbub),
-                       ctypes.byref(_pdew),
-                       ctypes.byref(_Dlbub),
-                       ctypes.byref(_Dvdew),
-                       _xbub,
-                       _xdew,
-                       ctypes.byref(_p),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "TSFL2" unsupported in Windows')
-            #~ _rp.TSFL2dll(ctypes.byref(_t),
-                            #~ ctypes.byref(_s),
-                            #~ _x,
-                            #~ ctypes.byref(_ksat),
-                            #~ ctypes.byref(_pbub),
-                            #~ ctypes.byref(_pdew),
-                            #~ ctypes.byref(_Dlbub),
-                            #~ ctypes.byref(_Dvdew),
-                            #~ _xbub,
-                            #~ _xdew,
-                            #~ ctypes.byref(_p),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rptsfl2_(byref(_t), byref(_s), _x, byref(_ksat), byref(_pbub),
+                   byref(_pdew), byref(_Dlbub), byref(_Dvdew), _xbub, _xdew,
+                   byref(_p), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                   byref(_q), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'TE':
         _t.value, _e.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.tefl2_(ctypes.byref(_t),
-                       ctypes.byref(_e),
-                       _x,
-                       ctypes.byref(_ksat),
-                       ctypes.byref(_pbub),
-                       ctypes.byref(_pdew),
-                       ctypes.byref(_Dlbub),
-                       ctypes.byref(_Dvdew),
-                       _xbub,
-                       _xdew,
-                       ctypes.byref(_p),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "TEFL2" unsupported in Windows')
-            #~ _rp.TEFL2dll(ctypes.byref(_t),
-                            #~ ctypes.byref(_e),
-                            #~ _x,
-                            #~ ctypes.byref(_ksat),
-                            #~ ctypes.byref(_pbub),
-                            #~ ctypes.byref(_pdew),
-                            #~ ctypes.byref(_Dlbub),
-                            #~ ctypes.byref(_Dvdew),
-                            #~ _xbub,
-                            #~ _xdew,
-                            #~ ctypes.byref(_p),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rptefl2_(byref(_t), byref(_e), _x, byref(_ksat), byref(_pbub),
+                   byref(_pdew), byref(_Dlbub), byref(_Dvdew), _xbub, _xdew,
+                   byref(_p), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                   byref(_q), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'TD':
         _t.value, _D.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.tdfl2_(ctypes.byref(_t),
-                       ctypes.byref(_D),
-                       _x,
-                       ctypes.byref(_ksat),
-                       ctypes.byref(_pbub),
-                       ctypes.byref(_pdew),
-                       ctypes.byref(_Dlbub),
-                       ctypes.byref(_Dvdew),
-                       _xbub,
-                       _xdew,
-                       ctypes.byref(_p),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "TDFL2" unsupported in Windows')
-            #~ _rp.TDFL2dll(ctypes.byref(_t),
-                            #~ ctypes.byref(_D),
-                            #~ _x,
-                            #~ ctypes.byref(_ksat),
-                            #~ ctypes.byref(_pbub),
-                            #~ ctypes.byref(_pdew),
-                            #~ ctypes.byref(_Dlbub),
-                            #~ ctypes.byref(_Dvdew),
-                            #~ _xbub,
-                            #~ _xdew,
-                            #~ ctypes.byref(_p),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rptdfl2_(byref(_t), byref(_D), _x, byref(_ksat), byref(_pbub),
+                   byref(_pdew), byref(_Dlbub), byref(_Dvdew), _xbub, _xdew,
+                   byref(_p), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                   byref(_q), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'PD':
         _p.value, _D.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.pdfl2_(ctypes.byref(_p),
-                       ctypes.byref(_D),
-                       _x,
-                       ctypes.byref(_ksat),
-                       ctypes.byref(_tbub),
-                       ctypes.byref(_tdew),
-                       ctypes.byref(_Dlbub),
-                       ctypes.byref(_Dvdew),
-                       _xbub,
-                       _xdew,
-                       ctypes.byref(_t),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "PDFL2" unsupported in Windows')
-            #~ _rp.PDFL2dll(ctypes.byref(_p),
-                            #~ ctypes.byref(_D),
-                            #~ _x,
-                            #~ ctypes.byref(_ksat),
-                            #~ ctypes.byref(_tbub),
-                            #~ ctypes.byref(_tdew),
-                            #~ ctypes.byref(_Dlbub),
-                            #~ ctypes.byref(_Dvdew),
-                            #~ _xbub,
-                            #~ _xdew,
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+
+        _rppdfl2_(byref(_p), byref(_D), _x, byref(_ksat), byref(_tbub),
+                   byref(_tdew), byref(_Dlbub), byref(_Dvdew), _xbub, _xdew,
+                   byref(_t), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                   byref(_q), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'PH':
         _p.value, _h.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.phfl2_(ctypes.byref(_p),
-                       ctypes.byref(_h),
-                       _x,
-                       ctypes.byref(_ksat),
-                       ctypes.byref(_tbub),
-                       ctypes.byref(_tdew),
-                       ctypes.byref(_Dlbub),
-                       ctypes.byref(_Dvdew),
-                       _xbub,
-                       _xdew,
-                       ctypes.byref(_t),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "PHFL2" unsupported in Windows')
-            #~ _rp.PHFL2dll(ctypes.byref(_p),
-                            #~ ctypes.byref(_h),
-                            #~ _x,
-                            #~ ctypes.byref(_ksat),
-                            #~ ctypes.byref(_tbub),
-                            #~ ctypes.byref(_tdew),
-                            #~ ctypes.byref(_Dlbub),
-                            #~ ctypes.byref(_Dvdew),
-                            #~ _xbub,
-                            #~ _xdew,
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rpphfl2_(byref(_p), byref(_h), _x, byref(_ksat), byref(_tbub),
+                   byref(_tdew), byref(_Dlbub), byref(_Dvdew), _xbub, _xdew,
+                   byref(_t), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                   byref(_q), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'PS':
         _p.value, _s.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.psfl2_(ctypes.byref(_p),
-                       ctypes.byref(_s),
-                       _x,
-                       ctypes.byref(_ksat),
-                       ctypes.byref(_tbub),
-                       ctypes.byref(_tdew),
-                       ctypes.byref(_Dlbub),
-                       ctypes.byref(_Dvdew),
-                       _xbub,
-                       _xdew,
-                       ctypes.byref(_t),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "PSFL2" unsupported in Windows')
-            #~ _rp.PSFL2dll(ctypes.byref(_p),
-                            #~ ctypes.byref(_s),
-                            #~ _x,
-                            #~ ctypes.byref(_ksat),
-                            #~ ctypes.byref(_tbub),
-                            #~ ctypes.byref(_tdew),
-                            #~ ctypes.byref(_Dlbub),
-                            #~ ctypes.byref(_Dvdew),
-                            #~ _xbub,
-                            #~ _xdew,
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rppsfl2_(byref(_p), byref(_s), _x, byref(_ksat), byref(_tbub),
+                   byref(_tdew), byref(_Dlbub), byref(_Dvdew), _xbub, _xdew,
+                   byref(_t), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                   byref(_q), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'PE':
         _p.value, _e.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.pefl2_(ctypes.byref(_p),
-                       ctypes.byref(_e),
-                       _x,
-                       ctypes.byref(_ksat),
-                       ctypes.byref(_tbub),
-                       ctypes.byref(_tdew),
-                       ctypes.byref(_Dlbub),
-                       ctypes.byref(_Dvdew),
-                       _xbub,
-                       _xdew,
-                       ctypes.byref(_t),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_q),
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "PEFL2" unsupported in Windows')
-            #~ _rp.PEFL2dll(ctypes.byref(_p),
-                            #~ ctypes.byref(_e),
-                            #~ _x,
-                            #~ ctypes.byref(_ksat),
-                            #~ ctypes.byref(_tbub),
-                            #~ ctypes.byref(_tdew),
-                            #~ ctypes.byref(_Dlbub),
-                            #~ ctypes.byref(_Dvdew),
-                            #~ _xbub,
-                            #~ _xdew,
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_q),
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rppefl2_(byref(_p), byref(_e), _x, byref(_ksat), byref(_tbub),
+                   byref(_tdew), byref(_Dlbub), byref(_Dvdew), _xbub, _xdew,
+                   byref(_t), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                   byref(_q), byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'TQ':
         _t.value, _q.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.tqfl2_(ctypes.byref(_t),
-                       ctypes.byref(_q),
-                       _x,
-                       ctypes.byref(_kq),
-                       ctypes.byref(_ksat),
-                       ctypes.byref(_pbub),
-                       ctypes.byref(_pdew),
-                       ctypes.byref(_Dlbub),
-                       ctypes.byref(_Dvdew),
-                       _xbub,
-                       _xdew,
-                       ctypes.byref(_p),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "TQLF2" unsupported in Windows')
-            #~ _rp.TQFL2dll(ctypes.byref(_t),
-                            #~ ctypes.byref(_q),
-                            #~ _x,
-                            #~ ctypes.byref(ctypes.c_long(1)),
-                            #~ ctypes.byref(_ksat),
-                            #~ ctypes.byref(_pbub),
-                            #~ ctypes.byref(_pdew),
-                            #~ ctypes.byref(_Dlbub),
-                            #~ ctypes.byref(_Dvdew),
-                            #~ _xbub,
-                            #~ _xdew,
-                            #~ ctypes.byref(_p),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rptqfl2_(byref(_t), byref(_q), _x, byref(_kq), byref(_ksat),
+                   byref(_pbub), byref(_pdew), byref(_Dlbub), byref(_Dvdew),
+                   _xbub, _xdew, byref(_p), byref(_Dliq), byref(_Dvap), _xliq,
+                   _xvap, byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'PQ':
         _p.value, _q.value = var1, var2
-        if platform.system() == u'Linux':
-            _rp.pqfl2_(ctypes.byref(_p),
-                       ctypes.byref(_q),
-                       _x,
-                       ctypes.byref(_kq),
-                       ctypes.byref(_ksat),
-                       ctypes.byref(_tbub),
-                       ctypes.byref(_tdew),
-                       ctypes.byref(_Dlbub),
-                       ctypes.byref(_Dvdew),
-                       _xbub,
-                       _xdew,
-                       ctypes.byref(_t),
-                       ctypes.byref(_Dliq),
-                       ctypes.byref(_Dvap),
-                       _xliq,
-                       _xvap,
-                       ctypes.byref(_ierr),
-                       ctypes.byref(_herr),
-                       ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "PQFL2" unsupported in Windows')
-            #~ _rp.PQFL2dll(ctypes.byref(_p),
-                            #~ ctypes.byref(_q),
-                            #~ _x,
-                            #~ ctypes.byref(ctypes.c_long(1)),
-                            #~ ctypes.byref(_ksat),
-                            #~ ctypes.byref(_tbub),
-                            #~ ctypes.byref(_tdew),
-                            #~ ctypes.byref(_Dlbub),
-                            #~ ctypes.byref(_Dvdew),
-                            #~ _xbub,
-                            #~ _xdew,
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+        
+        _rppqfl2_(byref(_p), byref(_q), _x, byref(_kq), byref(_ksat),
+                   byref(_tbub), byref(_tdew), byref(_Dlbub), byref(_Dvdew),
+                   _xbub, _xdew, byref(_t), byref(_Dliq), byref(_Dvap), _xliq,
+                   _xvap, byref(_ierr), byref(_herr), c_long(255))
+
     elif routine.upper() == u'DQ':
         _D.value, _q.value = var1, var2
-        if platform.system() == u'Linux':
-            raise RefproproutineError(u'function "DQFL2" unsupported in Linux')
-            #~ _rp.dqfl2_(ctypes.byref(_D),
-                        #~ ctypes.byref(_q),
-                        #~ _x,
-                        #~ ctypes.byref(_kq),
-                        #~ ctypes.byref(_t),
-                        #~ ctypes.byref(_p),
-                        #~ ctypes.byref(_Dliq),
-                        #~ ctypes.byref(_Dvap),
-                        #~ _xliq,
-                        #~ _xvap,
-                        #~ ctypes.byref(_ierr),
-                        #~ ctypes.byref(_herr),
-                        #~ ctypes.c_long(255))
-        elif platform.system() == u'Windows':
-            raise RefproproutineError(u'function "DQFL2" unsupported in Windows')
-            #~ _rp.DQFL2dll(ctypes.byref(_D),
-                            #~ ctypes.byref(_q),
-                            #~ _x,
-                            #~ ctypes.byref(ctypes.c_long(1)),
-                            #~ ctypes.byref(_t),
-                            #~ ctypes.byref(_p),
-                            #~ ctypes.byref(_Dliq),
-                            #~ ctypes.byref(_Dvap),
-                            #~ _xliq,
-                            #~ _xvap,
-                            #~ ctypes.byref(_ierr),
-                            #~ ctypes.byref(_herr),
-                            #~ ctypes.c_long(255))
+
+        raise RefproproutineError(u'function "DQFL2" unsupported in Linux')
+        ##~ _rpdqfl2_(byref(_D), byref(_q), _x, byref(_kq), byref(_t),
+                        #~ byref(_p), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                        #~ byref(_ierr), byref(_herr), 255)
+
     else: raise RefpropinputError(u'Incorrect "routine" input, ' +
                                     unicode(routine) +
                                     u' is an invalid input')
@@ -5881,7 +4084,7 @@ def flsh2(routine, var1, var2, x, kq=1, ksat=0, tbub=0, tdew=0, pbub=0, pdew=0,
 
 def _abfl2(routine, var1, var2, x, kq=1, ksat=0, tbub=0, tdew=0, pbub=0,
     pdew=0, Dlbub=0, Dvdew=0, xbub=None, xdew=None):
-    u"""General flash calculation given two inputs and composition.  Valid
+    u'''General flash calculation given two inputs and composition.  Valid
     properties for the first input are temperature and pressure.  Valid
     properties for the second input are density, energy, enthalpy, entropy,
     or quality.  The character string ab specifies the inputs.  Note that
@@ -5923,9 +4126,9 @@ def _abfl2(routine, var1, var2, x, kq=1, ksat=0, tbub=0, tdew=0, pbub=0,
         Dvap--molar density [mol/L] of the vapor phase
         xliq--composition of liquid phase [array of mol frac]
         xvap--composition of vapor phase [array of mol frac]
-        q--vapor quality on a MOLAR basis [moles vapor/total moles]"""
+        q--vapor quality on a MOLAR basis [moles vapor/total moles]'''
 
-    defname = sys._getframe(0).f_code.co_name, locals()
+    defname = u'_abfl2'
 
     _inputerrorcheck(locals())
     for each in xrange(len(x)):
@@ -5940,34 +4143,11 @@ def _abfl2(routine, var1, var2, x, kq=1, ksat=0, tbub=0, tdew=0, pbub=0,
     _var1.value, _var2.value = var1, var2
     _routine.value = routine.upper().encode(u'ascii')
 
-    if platform.system() == u'Linux':
-        _rp.abfl2_(ctypes.byref(_var1),
-                   ctypes.byref(_var2),
-                   _x,
-                   ctypes.byref(_kq),
-                   ctypes.byref(_ksat),
-                   ctypes.byref(_routine),
-                   ctypes.byref(_tbub),
-                   ctypes.byref(_tdew),
-                   ctypes.byref(_pbub),
-                   ctypes.byref(_pdew),
-                   ctypes.byref(_Dlbub),
-                   ctypes.byref(_Dvdew),
-                   _xbub,
-                   _xdew,
-                   ctypes.byref(_t),
-                   ctypes.byref(_p),
-                   ctypes.byref(_Dliq),
-                   ctypes.byref(_Dvap),
-                   _xliq,
-                   _xvap,
-                   ctypes.byref(_q),
-                   ctypes.byref(_ierr),
-                   ctypes.byref(_herr),
-                   ctypes.c_long(2),
-                   ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        raise RefproproutineError(u'function "ABFL2" unsupported in Windows')
+    _rpabfl2_(byref(_var1), byref(_var2), _x, byref(_kq), byref(_ksat),
+               byref(_routine), byref(_tbub), byref(_tdew), byref(_pbub),
+               byref(_pdew), byref(_Dlbub), byref(_Dvdew), _xbub, _xdew,
+               byref(_t), byref(_p), byref(_Dliq), byref(_Dvap), _xliq,
+               _xvap, byref(_q), byref(_ierr), byref(_herr), c_long(2), c_long(255))
 
     #define various x values
     xliq = normalize([_xliq[each] for each in xrange(_nc_rec.record)])[u'x']
@@ -6090,7 +4270,7 @@ def _abfl2(routine, var1, var2, x, kq=1, ksat=0, tbub=0, tdew=0, pbub=0,
                           Dlbub = _Dlbub.value, Dvdew = _Dvdew.value,
                           xdew = xdew, defname = defname)
         elif routine.upper()[1] == u'Q':
-            return _prop(x = x, t = var1, p = _p.value, D = D, q = q,
+            return _prop(x = x, t = var1, p = _p.value, D = D, q = var2,
                           Dliq = Dliq, Dvap = Dvap, xliq = xliq, xbub = xbub,
                           xvap = xvap, ksat = ksat, kq = kq,
                           ierr = _ierr.value, herr = _herr.value,
@@ -6117,30 +4297,11 @@ def info(icomp=1):
         Rgas--gas constant [J/mol-K]'''
     _inputerrorcheck(locals())
     _icomp.value = icomp
-    if platform.system() == u'Linux':
-        _rp.info_(ctypes.byref(_icomp),
-                    ctypes.byref(_wmm),
-                    ctypes.byref(_ttrp),
-                    ctypes.byref(_tnbpt),
-                    ctypes.byref(_tcrit),
-                    ctypes.byref(_pcrit),
-                    ctypes.byref(_Dcrit),
-                    ctypes.byref(_zcrit),
-                    ctypes.byref(_acf),
-                    ctypes.byref(_dip),
-                    ctypes.byref(_Rgas))
-    elif platform.system() == u'Windows':
-        _rp.INFOdll(ctypes.byref(_icomp),
-                        ctypes.byref(_wmm),
-                        ctypes.byref(_ttrp),
-                        ctypes.byref(_tnbpt),
-                        ctypes.byref(_tcrit),
-                        ctypes.byref(_pcrit),
-                        ctypes.byref(_Dcrit),
-                        ctypes.byref(_zcrit),
-                        ctypes.byref(_acf),
-                        ctypes.byref(_dip),
-                        ctypes.byref(_Rgas))
+
+    _rpinfo_(byref(_icomp), byref(_wmm), byref(_ttrp), byref(_tnbpt),
+                  byref(_tcrit), byref(_pcrit), byref(_Dcrit), byref(_zcrit),
+                  byref(_acf), byref(_dip), byref(_Rgas))
+
     return _prop(icomp = icomp, wmm = _wmm.value, ttrp = _ttrp.value,
             tnbpt = _tnbpt.value, tcrit = _tcrit.value, Dcrit = _Dcrit.value,
             zcrit = _zcrit.value, acf = _acf.value, dip = _dip.value,
@@ -6157,13 +4318,9 @@ def rmix2(x):
         Rgas--gas constant [J/mol-K]'''
     _inputerrorcheck(locals())
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.rmix2_(_x,
-                    ctypes.byref(_Rgas))
-    elif platform.system() == u'Windows':
-        raise RefproproutineError(u'function "rmix2" unsupported in Windows')
-        _rp.RMIX2dll(_x,
-                        ctypes.byref(_Rgas))
+
+    _rprmix2_(_x, byref(_Rgas))
+
     return _prop(x = x, Rgas = _Rgas.value)
 
 
@@ -6177,14 +4334,9 @@ def xmass(x):
         wmix--molar mass of the mixture [g/mol], a.k.a. "molecular weight"'''
     _inputerrorcheck(locals())
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.xmass_(_x,
-                   _xkg,
-                   ctypes.byref(_wmix))
-    elif platform.system() == u'Windows':
-        _rp.XMASSdll(_x,
-                     _xkg,
-                     ctypes.byref(_wmix))
+
+    _rpxmass_(_x, _xkg, byref(_wmix))
+
     xkg = normalize([_xkg[each] for each in xrange(_nc_rec.record)])[u'x']
     if u'_purefld_rec' in _Setuprecord.object_list \
     and len(x) == 1:
@@ -6203,14 +4355,9 @@ def xmole(xkg):
         wmix--molar mass of the mixture [g/mol], a.k.a. "molecular weight"'''
     _inputerrorcheck(locals())
     for each in xrange(len(xkg)): _xkg[each] = xkg[each]
-    if platform.system() == u'Linux':
-        _rp.xmole_(_xkg,
-                   _x,
-                   ctypes.byref(_wmix))
-    elif platform.system() == u'Windows':
-        _rp.XMOLEdll(_xkg,
-                     _x,
-                     ctypes.byref(_wmix))
+    
+    _rpxmole_(_xkg, _x, byref(_wmix))
+
     x = normalize([_x[each] for each in xrange(_nc_rec.record)])[u'x']
     if u'_purefld_rec' in _Setuprecord.object_list \
     and len(xkg) == 1:
@@ -6261,44 +4408,20 @@ def limitx(x, htype=u'EOS', t=0, D=0, p=0):
         tmax--maximum temperature [K]
         Dmax--maximum density [mol/L]
         pmax--maximum pressure [kPa]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _htype.value = htype.upper().encode(u'ascii')
     for each in xrange(len(x)): _x[each] = x[each]
     _t.value, _D.value, _p.value = t, D, p
-    if platform.system() == u'Linux':
-        _rp.limitx_(ctypes.byref(_htype),
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_p),
-                        _x,
-                        ctypes.byref(_tmin),
-                        ctypes.byref(_tmax),
-                        ctypes.byref(_Dmax),
-                        ctypes.byref(_pmax),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(3),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.LIMITXdll(ctypes.byref(_htype),
-                            ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            ctypes.byref(_p),
-                            _x,
-                            ctypes.byref(_tmin),
-                            ctypes.byref(_tmax),
-                            ctypes.byref(_Dmax),
-                            ctypes.byref(_pmax),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(3),
-                            ctypes.c_long(255))
+    
+    _rplimitx_(byref(_htype), byref(_t), byref(_D), byref(_p), _x,
+                byref(_tmin), byref(_tmax), byref(_Dmax), byref(_pmax),
+                byref(_ierr), byref(_herr), c_long(3), c_long(255))
+
     return _prop(x = x, t = t, D = D, htype = htype.upper(), p = p,
                   tmin = _tmin.value, tmax = _tmax.value, Dmax = _Dmax.value,
                   pmax = _pmax.value, ierr = _ierr.value, herr = _herr.value,
-                  defname = defname)
+                  defname = u'limitx')
 
 
 def limitk(htype=u'EOS', icomp=1, t=u'tnbp', D=0, p=0):
@@ -6343,45 +4466,19 @@ def limitk(htype=u'EOS', icomp=1, t=u'tnbp', D=0, p=0):
     if t == u'tnbp':
         t = info(icomp)[u'tnbpt']
 
-    defname = sys._getframe(0).f_code.co_name, locals()
-
     _inputerrorcheck(locals())
     _htype.value = htype.upper().encode(u'ascii')
     _icomp.value = icomp
     _t.value, _D.value, _p.value = t, D, p
 
-    if platform.system() == u'Linux':
-        _rp.limitk_(ctypes.byref(_htype),
-                        ctypes.byref(_icomp),
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        ctypes.byref(_p),
-                        ctypes.byref(_tmin),
-                        ctypes.byref(_tmax),
-                        ctypes.byref(_Dmax),
-                        ctypes.byref(_pmax),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(3),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.LIMITKdll(ctypes.byref(_htype),
-                            ctypes.byref(_icomp),
-                            ctypes.byref(_t),
-                            ctypes.byref(_D),
-                            ctypes.byref(_p),
-                            ctypes.byref(_tmin),
-                            ctypes.byref(_tmax),
-                            ctypes.byref(_Dmax),
-                            ctypes.byref(_pmax),
-                            ctypes.byref(_ierr),
-                            ctypes.byref(_herr),
-                            ctypes.c_long(3),
-                            ctypes.c_long(255))
+    _rplimitk_(byref(_htype), byref(_icomp), byref(_t), byref(_D),
+                byref(_p), byref(_tmin), byref(_tmax), byref(_Dmax),
+                byref(_pmax), byref(_ierr), byref(_herr), c_long(3), c_long(255))
+
     return _prop(icomp = icomp, t = t, D = D, htype = htype.upper(),
             p = p, tmin = _tmin.value, tmax = _tmax.value,
             Dmax = _Dmax.value, pmax = _pmax.value, ierr = _ierr.value,
-            herr = _herr.value, defname = defname)
+            herr = _herr.value, defname = u'limitl')
 
 
 def limits(x, htype=u'EOS'):
@@ -6405,22 +4502,10 @@ def limits(x, htype=u'EOS'):
     _inputerrorcheck(locals())
     _htype.value = htype.upper().encode(u'ascii')
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.limits_(ctypes.byref(_htype),
-                        _x,
-                        ctypes.byref(_tmin),
-                        ctypes.byref(_tmax),
-                        ctypes.byref(_Dmax),
-                        ctypes.byref(_pmax),
-                        ctypes.c_long(3))
-    elif platform.system() == u'Windows':
-        _rp.LIMITSdll(ctypes.byref(_htype),
-                            _x,
-                            ctypes.byref(_tmin),
-                            ctypes.byref(_tmax),
-                            ctypes.byref(_Dmax),
-                            ctypes.byref(_pmax),
-                            ctypes.c_long(3))
+
+    _rplimits_(byref(_htype), _x, byref(_tmin), byref(_tmax), byref(_Dmax),
+                byref(_pmax), c_long(3))
+
     return _prop(x = x,
             htype = htype.upper(), tmin = _tmin.value, tmax = _tmax.value,
             Dmax = _Dmax.value, pmax = _pmax.value)
@@ -6443,38 +4528,16 @@ def qmass(q, xliq, xvap):
         xvkg--mass composition of vapor phase [array of mass frac]
         wliq--molecular weight of liquid phase [g/mol]
         wvap--molecular weight of vapor phase [g/mol]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
-
     _inputerrorcheck(locals())
     _q.value = q
     for each in xrange(len(xliq)):
         _xliq[each] = xliq[each]
     for each in xrange(len(xvap)):
         _xvap[each] = xvap[each]
-    if platform.system() == u'Linux':
-        _rp.qmass_(ctypes.byref(_q),
-                    _xliq,
-                    _xvap,
-                    ctypes.byref(_qkg),
-                    _xlkg,
-                    _xvkg,
-                    ctypes.byref(_wliq),
-                    ctypes.byref(_wvap),
-                    ctypes.byref(_ierr),
-                    ctypes.byref(_herr),
-                    ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.QMASSdll(ctypes.byref(_q),
-                        _xliq,
-                        _xvap,
-                        ctypes.byref(_qkg),
-                        _xlkg,
-                        _xvkg,
-                        ctypes.byref(_wliq),
-                        ctypes.byref(_wvap),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    
+    _rpqmass_(byref(_q), _xliq, _xvap, byref(_qkg), _xlkg, _xvkg,
+               byref(_wliq), byref(_wvap), byref(_ierr), byref(_herr), c_long(255))
+
     xlkg = normalize([_xlkg[each] for each in xrange(_nc_rec.record)])[u'x']
     xvkg = normalize([_xvkg[each] for each in xrange(_nc_rec.record)])[u'x']
     if u'_purefld_rec' in _Setuprecord.object_list \
@@ -6485,7 +4548,7 @@ def qmass(q, xliq, xvap):
             xvkg = [xvkg[_purefld_rec.record[u'icomp'] - 1]]
     return _prop(q = q, xliq = xliq, xvap = xvap, qkg = _qkg.value, xlkg = xlkg,
             xvkg = xvkg, wliq = _wliq.value, wvap = _wvap.value,
-            ierr = _ierr.value, herr = _herr.value, defname = defname)
+            ierr = _ierr.value, herr = _herr.value, defname = u'qmass')
 
 
 def qmole(qkg, xlkg, xvkg):
@@ -6505,7 +4568,6 @@ def qmole(qkg, xlkg, xvkg):
         xvap--molar composition of vapor phase [array of mol frac]
         wliq--molecular weight of liquid phase [g/mol]
         wvap--molecular weight of vapor phase [g/mol]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _qkg.value = qkg
@@ -6513,30 +4575,10 @@ def qmole(qkg, xlkg, xvkg):
         _xlkg[each] = xlkg[each]
     for each in xrange(len(xvkg)):
         _xvkg[each] = xvkg[each]
-    if platform.system() == u'Linux':
-        _rp.qmole_(ctypes.byref(_qkg),
-                    _xlkg,
-                    _xvkg,
-                    ctypes.byref(_q),
-                    _xliq,
-                    _xvap,
-                    ctypes.byref(_wliq),
-                    ctypes.byref(_wvap),
-                    ctypes.byref(_ierr),
-                    ctypes.byref(_herr),
-                    ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.QMOLEdll(ctypes.byref(_qkg),
-                        _xlkg,
-                        _xvkg,
-                        ctypes.byref(_q),
-                        _xliq,
-                        _xvap,
-                        ctypes.byref(_wliq),
-                        ctypes.byref(_wvap),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    
+    _rpqmole_(byref(_qkg), _xlkg, _xvkg, byref(_q), _xliq, _xvap,
+               byref(_wliq), byref(_wvap), byref(_ierr), byref(_herr), c_long(255))
+
     xliq = normalize([_xliq[each] for each in xrange(_nc_rec.record)])[u'x']
     xvap = normalize([_xvap[each] for each in xrange(_nc_rec.record)])[u'x']
     if u'_purefld_rec' in _Setuprecord.object_list \
@@ -6547,7 +4589,7 @@ def qmole(qkg, xlkg, xvkg):
             xvap = [xvap[_purefld_rec.record[u'icomp'] - 1]]
     return _prop(qkg = qkg, xlkg = xlkg, xvkg = xvkg, q = _q.value, xliq = xliq,
             xvap = xvap, wliq = _wliq.value, wvap = _wvap.value,
-            ierr = _ierr.value, herr = _herr.value, defname = defname)
+            ierr = _ierr.value, herr = _herr.value, defname = u'qmole')
 
 
 def wmol(x):
@@ -6559,12 +4601,9 @@ def wmol(x):
         wmix--molar mass [g/mol], a.k.a. "molecular weight'''
     _inputerrorcheck(locals())
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.wmoldll_(_x,
-                    ctypes.byref(_wmix))
-    elif platform.system() == u'Windows':
-        _rp.WMOLdll(_x,
-                        ctypes.byref(_wmix))
+
+    _rpwmoldll_(_x, byref(_wmix))
+
     return _prop(x = x, wmix = _wmix.value)
 
 
@@ -6581,16 +4620,9 @@ def dielec(t, D, x):
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.dielec_(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_de))
-    elif platform.system() == u'Windows':
-        _rp.DIELECdll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_de))
+    
+    _rpdielec_(byref(_t), byref(_D), _x, byref(_de))
+
     return _prop(x = x, t = t, D= D, de = _de.value)
 
 
@@ -6605,29 +4637,16 @@ def surft(t, x):
             if D > 0 use as input value
             < 0 call SATT to find density
         sigma--surface tension [N/m]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.surft_(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_sigma),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SURFTdll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_sigma),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    
+    _rpsurft_(byref(_t), byref(_D), _x, byref(_sigma), byref(_ierr),
+               byref(_herr), c_long(255))
+
     return _prop(x = x, t = t, D = _D.value, sigma = _sigma.value,
-                    ierr = _ierr.value, herr = _herr.value, defname = defname)
+                    ierr = _ierr.value, herr = _herr.value, defname = u'surft')
 
 
 def surten(t, Dliq, Dvap, xliq, xvap):
@@ -6643,7 +4662,6 @@ def surten(t, Dliq, Dvap, xliq, xvap):
             (xvap is optional input if Dliq < 0 or Dvap < 0)
     outputs:
         sigma--surface tension [N/m]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _t.value, _Dliq.value, _Dvap.value = t, Dliq, Dvap
@@ -6651,29 +4669,13 @@ def surten(t, Dliq, Dvap, xliq, xvap):
         _xliq[each] = xliq[each]
     for each in xrange(len(xvap)):
         _xvap[each] = xvap[each]
-    if platform.system() == u'Linux':
-        _rp.surten_(ctypes.byref(_t),
-                        ctypes.byref(_Dliq),
-                        ctypes.byref(_Dvap),
-                        _xliq,
-                        _xvap,
-                        ctypes.byref(_sigma),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SURTENdll(ctypes.byref(_t),
-                        ctypes.byref(_Dliq),
-                        ctypes.byref(_Dvap),
-                        _xliq,
-                        _xvap,
-                        ctypes.byref(_sigma),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    
+    _rpsurten_(byref(_t), byref(_Dliq), byref(_Dvap), _xliq, _xvap,
+                byref(_sigma), byref(_ierr), byref(_herr), c_long(255))
+
     return _prop(t = t, Dliq = Dliq, Dvap = Dvap, xliq = xliq, xvap = xvap,
             sigma = _sigma.value, ierr = _ierr.value, herr = _herr.value,
-            defname = defname)
+            defname = u'surten')
 
 
 def meltt(t, x):
@@ -6688,27 +4690,15 @@ def meltt(t, x):
 
     Caution
         if two valid outputs the function will returns the highest'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.meltt_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_p),
-                    ctypes.byref(_ierr),
-                    ctypes.byref(_herr),
-                    ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.MELTTdll(ctypes.byref(_t),
-                        _x,
-                        ctypes.byref(_p),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    
+    _rpmeltt_(byref(_t), _x, byref(_p), byref(_ierr), byref(_herr), c_long(255))
+
     return _prop(t = t, x = x, p = _p.value, ierr = _ierr.value,
-                        herr = _herr.value, defname = defname)
+                        herr = _herr.value, defname = u'meltt')
 
 
 def meltp(p, x):
@@ -6720,27 +4710,15 @@ def meltp(p, x):
         x--composition [array of mol frac]
     output:
         t--temperature [K]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _p.value = p
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.meltp_(ctypes.byref(_p),
-                        _x,
-                        ctypes.byref(_t),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.MELTPdll(ctypes.byref(_p),
-                        _x,
-                        ctypes.byref(_t),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+
+    _rpmeltp_(byref(_p), _x, byref(_t), byref(_ierr), byref(_herr), c_long(255))
+    
     return _prop(p = p, x = x, t = _t.value, ierr = _ierr.value,
-                    herr = _herr.value, defname = defname)
+                    herr = _herr.value, defname = u'meltp')
 
 
 def sublt(t, x):
@@ -6752,27 +4730,15 @@ def sublt(t, x):
         x--composition [array of mol frac]
     output:
         p--sublimation line pressure [kPa]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.sublt_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_p),
-                    ctypes.byref(_ierr),
-                    ctypes.byref(_herr),
-                    ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SUBLTdll(ctypes.byref(_t),
-                        _x,
-                        ctypes.byref(_p),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    
+    _rpsublt_(byref(_t), _x, byref(_p), byref(_ierr), byref(_herr), c_long(255))
+
     return _prop(t = t, x = x, p = _p.value, ierr = _ierr.value,
-            herr = _herr.value, defname = defname)
+            herr = _herr.value, defname = u'sublt')
 
 
 def sublp(p, x):
@@ -6784,27 +4750,15 @@ def sublp(p, x):
         x--composition [array of mol frac]
     output:
         t--temperature [K]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _p.value = p
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.sublp_(ctypes.byref(_p),
-                    _x,
-                    ctypes.byref(_t),
-                    ctypes.byref(_ierr),
-                    ctypes.byref(_herr),
-                    ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SUBLPdll(ctypes.byref(_p),
-                        _x,
-                        ctypes.byref(_t),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+
+    _rpsublp_(byref(_p), _x, byref(_t), byref(_ierr), byref(_herr), c_long(255))
+
     return _prop(p = p, x = x, t = _t.value, ierr = _ierr.value,
-                    herr = _herr.value, defname = defname)
+                    herr = _herr.value, defname = u'sublp')
 
 
 def trnprp(t, D, x):
@@ -6818,31 +4772,16 @@ def trnprp(t, D, x):
     outputs:
         eta--viscosity (uPa.s)
         tcx--thermal conductivity (W/m.K)'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _t.value, _D.value = t, D
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.trnprp_(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_eta),
-                        ctypes.byref(_tcx),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.TRNPRPdll(ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_eta),
-                        ctypes.byref(_tcx),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    
+    _rptrnprp_(byref(_t), byref(_D), _x, byref(_eta), byref(_tcx),
+                byref(_ierr), byref(_herr), c_long(255))
+
     return _prop(x = x, D = D, t = t, eta = _eta.value, tcx = _tcx.value,
-            ierr = _ierr.value, herr = _herr.value, defname = defname)
+            ierr = _ierr.value, herr = _herr.value, defname = u'trnprp')
 
 
 def getktv(icomp, jcomp):
@@ -6875,34 +4814,11 @@ def getktv(icomp, jcomp):
         hmxrul--description of the mixing rule [character*255]'''
     _inputerrorcheck(locals())
     _icomp.value, _jcomp.value = icomp, jcomp
-    if platform.system() == u'Linux':
-        _rp.getktv_(ctypes.byref(_icomp),
-                        ctypes.byref(_jcomp),
-                        ctypes.byref(_hmodij),
-                        _fij,
-                        ctypes.byref(_hfmix),
-                        _hfij,
-                        ctypes.byref(_hbinp),
-                        ctypes.byref(_hmxrul),
-                        ctypes.c_long(3),
-                        ctypes.c_long(255),
-                        ctypes.c_long(8),
-                        ctypes.c_long(255),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.GETKTVdll(ctypes.byref(_icomp),
-                        ctypes.byref(_jcomp),
-                        ctypes.byref(_hmodij),
-                        _fij,
-                        ctypes.byref(_hfmix),
-                        _hfij,
-                        ctypes.byref(_hbinp),
-                        ctypes.byref(_hmxrul),
-                        ctypes.c_long(3),
-                        ctypes.c_long(255),
-                        ctypes.c_long(8),
-                        ctypes.c_long(255),
-                        ctypes.c_long(255))
+    
+    _rpgetktv_(byref(_icomp), byref(_jcomp), byref(_hmodij), _fij,
+                byref(_hfmix), _hfij, byref(_hbinp), byref(_hmxrul), c_long(3), c_long(255),
+                c_long(8), c_long(255), c_long(255))
+
     return _prop(icomp = icomp, jcomp = jcomp,
             hmodij = _hmodij.value.decode(u'utf-8'),
             fij = [_fij[each] for each in xrange(_nmxpar)],
@@ -6960,23 +4876,10 @@ def getmod(icomp, htype):
             and the remaining are the citation for the source'''
     _inputerrorcheck(locals())
     _icomp.value, _htype.value = icomp, htype.upper().encode(u'ascii')
-    if platform.system() == u'Linux':
-        _rp.getmod_(ctypes.byref(_icomp),
-                        ctypes.byref(_htype),
-                        ctypes.byref(_hcode),
-                        ctypes.byref(_hcite),
-                        ctypes.c_long(3),
-                        ctypes.c_long(3),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        raise RefproproutineError(u'routine "getmod" unsupported in Windows')
-        _rp.getmod_(ctypes.byref(_icomp),
-                        ctypes.byref(_htype),
-                        ctypes.byref(_hcode),
-                        ctypes.byref(_hcite),
-                        ctypes.c_long(3),
-                        ctypes.c_long(3),
-                        ctypes.c_long(255))
+
+    _rpgetmod_(byref(_icomp), byref(_htype), byref(_hcode), byref(_hcite),
+                c_long(3), c_long(3), c_long(255))
+
     return _prop(icomp = icomp, htype = htype,
                         hcode = _hcode.value.decode(u'utf-8'),
                         hcite = _hcite.value.decode(u'utf-8').rstrip())
@@ -7012,7 +4915,7 @@ def setktv(icomp, jcomp, hmodij, fij=([0] * _nmxpar), hfmix=u'HMX.BNC'):
         hfmix--file name [character*255] containing generalized parameters
             for the binary mixture model; this will usually be the same as the
             corresponding input to SETUP (e.g.,':fluids:HMX.BNC')'''
-    global _setktv_rec, _setupprop
+    global _setktv_rec, _fpath, _setupprop
 
     #verify multiple model calls
     _checksetupmodel(u'setktv')
@@ -7021,9 +4924,7 @@ def setktv(icomp, jcomp, hmodij, fij=([0] * _nmxpar), hfmix=u'HMX.BNC'):
 
     #define setup record for FluidModel
     if hmodij.upper() != u'RST':
-        _setktv_rec = _Setuprecord(copy.copy(locals()), u'_setktv_rec')
-
-    defname = sys._getframe(0).f_code.co_name, locals()
+        _setktv_rec = _Setuprecord(copy(locals()), u'_setktv_rec')
 
     _icomp.value, _jcomp.value = icomp, jcomp
     _hmodij.value = hmodij.upper().encode(u'ascii')
@@ -7031,28 +4932,10 @@ def setktv(icomp, jcomp, hmodij, fij=([0] * _nmxpar), hfmix=u'HMX.BNC'):
         _hfmix.value = (_fpath + u'fluids/HMX.BNC').encode(u'ascii')
     else: _hfmix.value = hfmix.encode(u'ascii')
     for each in xrange(_nmxpar): _fij[each] = fij[each]
-    if platform.system() == u'Linux':
-        _rp.setktv_(ctypes.byref(_icomp),
-                        ctypes.byref(_jcomp),
-                        ctypes.byref(_hmodij),
-                        _fij,
-                        ctypes.byref(_hfmix),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(3),
-                        ctypes.c_long(255),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SETKTVdll(ctypes.byref(_icomp),
-                        ctypes.byref(_jcomp),
-                        ctypes.byref(_hmodij),
-                        _fij,
-                        ctypes.byref(_hfmix),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(3),
-                        ctypes.c_long(255),
-                        ctypes.c_long(255))
+
+    _rpsetktv_(byref(_icomp), byref(_jcomp), byref(_hmodij), _fij,
+                byref(_hfmix), byref(_ierr), byref(_herr), c_long(3), c_long(255), c_long(255))
+
     if hmodij.upper() != u'RST':
         stktv = {}
         stktv[u'icomp'] = icomp
@@ -7067,7 +4950,7 @@ def setktv(icomp, jcomp, hmodij, fij=([0] * _nmxpar), hfmix=u'HMX.BNC'):
         if u'_setktv_rec' in _Setuprecord.object_list:
             _setktv_rec = None
 
-    return _prop(ierr = _ierr.value, herr = _herr.value, defname = defname)
+    return _prop(ierr = _ierr.value, herr = _herr.value, defname = u'setktv')
 
 
 def setaga():
@@ -7083,30 +4966,22 @@ def setaga():
     _checksetupmodel(u'setaga')
 
     #define setup record for FluidModel
-    _setaga_rec = _Setuprecord(copy.copy(locals()), u'_setaga_rec')
+    _setaga_rec = _Setuprecord(copy(locals()), u'_setaga_rec')
 
-    defname = sys._getframe(0).f_code.co_name, locals()
 
-    if platform.system() == u'Linux':
-        _rp.setaga_(ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.SETAGAdll(ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    _rpsetaga_(byref(_ierr), byref(_herr), c_long(255))
+
     _setupprop[u'setaga'] = True
-    return _prop(ierr = _ierr.value, herr = _herr.value, defname = defname)
+    return _prop(ierr = _ierr.value, herr = _herr.value, defname = u'setaga')
 
 
 def unsetaga():
     u'''Load original values into arrays changed in the call to SETAGA.  This
     routine resets the values back to those loaded when SETUP was called.'''
-    global _setaga_rec
-    if platform.system() == u'Linux':
-        _rp.unsetaga_()
-    elif platform.system() == u'Windows':
-        _rp.UNSETAGAdll()
+    global _setaga_rec, _setupprop
+
+    _rpunsetaga_()
+
     if u'setaga' in _setupprop:
         _setupprop.__delitem__(u'setaga')
     if u'_setaga_rec' in _Setuprecord.object_list:
@@ -7132,10 +5007,9 @@ def preos(ixflag=0):
     _inputerrorcheck(locals())
 
     _ixflag.value = ixflag
-    if platform.system() == u'Linux':
-        _rp.preos_(ctypes.byref(_ixflag))
-    elif platform.system() == u'Windows':
-        _rp.PREOSdll(ctypes.byref(_ixflag))
+
+    _rppreos_(byref(_ixflag))
+
     #return settings
     if ixflag == -1:
         #some unknown reason the value is less 2*32
@@ -7168,22 +5042,9 @@ def getfij(hmodij):
         hmxrul--description of the mixing rule [character*255]'''
     _inputerrorcheck(locals())
     _hmodij.value = hmodij.upper().encode(u'ascii')
-    if platform.system() == u'Linux':
-        _rp.getfij_(ctypes.byref(_hmodij),
-                        _fij,
-                        _hfij,
-                        ctypes.byref(_hmxrul),
-                        ctypes.c_long(3),
-                        ctypes.c_long(8),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.GETFIJdll(ctypes.byref(_hmodij),
-                        _fij,
-                        _hfij,
-                        ctypes.byref(_hmxrul),
-                        ctypes.c_long(3),
-                        ctypes.c_long(8),
-                        ctypes.c_long(255))
+
+    _rpgetfij_(byref(_hmodij), _fij, _hfij, byref(_hmxrul), c_long(3), c_long(8), c_long(255))
+
     return _prop(hmodij = hmodij.upper(),
             fij = [_fij[each] for each in xrange(_nmxpar)],
             hmxrul = _hmxrul.value.decode(u'utf-8').rstrip(),
@@ -7205,14 +5066,9 @@ def b12(t, x):
     _inputerrorcheck(locals())
     _t.value = t
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.b12_(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_b))
-    elif platform.system() == u'Windows':
-        _rp.B12dll(ctypes.byref(_t),
-                    _x,
-                    ctypes.byref(_b))
+
+    _rpb12_(byref(_t), _x, byref(_b))
+
     return _prop(t = t, x = x, b = _b.value)
 
 
@@ -7239,113 +5095,109 @@ def excess(t, p, x, kph=0):
         aE--excess Helmholtz energy [J/mol]
         gE--excess Gibbs energy [J/mol]'''
     _inputerrorcheck(locals())
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _t.value, _p.value, _kph.value = t, p, kph
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.excess_(ctypes.byref(_t),
-                        ctypes.byref(_p),
-                        _x,
-                        ctypes.byref(_kph),
-                        ctypes.byref(_D),
-                        ctypes.byref(_vE),
-                        ctypes.byref(_eE),
-                        ctypes.byref(_hE),
-                        ctypes.byref(_sE),
-                        ctypes.byref(_aE),
-                        ctypes.byref(_gE),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        raise RefproproutineError(u'function "excess" unsupported in Windows')
-        _rp.EXCESSdll(ctypes.byref(_t),
-                        ctypes.byref(_p),
-                        _x,
-                        ctypes.byref(_kph),
-                        ctypes.byref(_D),
-                        ctypes.byref(_vE),
-                        ctypes.byref(_eE),
-                        ctypes.byref(_hE),
-                        ctypes.byref(_sE),
-                        ctypes.byref(_aE),
-                        ctypes.byref(_gE),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+
+    _rpexcess_(byref(_t), byref(_p), _x, byref(_kph), byref(_D), byref(_vE),
+                byref(_eE), byref(_hE), byref(_sE), byref(_aE), byref(_gE),
+                byref(_ierr), byref(_herr), c_long(255))
+
     return _prop(t = t, p = p, x = x, kph = kph, D = _D.value, vE = _vE.value,
             eE = _eE.value, hE = _hE.value, sE = _sE.value, aE = _aE.value,
             gE = _gE.value, ierr = _ierr.value, herr = _herr.value,
-            defname = defname)
+            defname = u'excess')
 
 
-def phiderv(icomp, jcomp, t, D, x):
-    u'''Calculate various derivatives needed for VLE determination
+#def phiderv(icomp, jcomp, t, D, x): input values changed......................................
+    #'''Calculate various derivatives needed for VLE determination
 
-    based on derivations in the GERG-2004 document for natural gas
+    #based on derivations in the GERG-2004 document for natural gas
 
-    inputs:
-        icomp--component number of which to take derivative
-        jcomp--component number of which to take derivative
-        t--temperature (K)
-        D--density (mol/L)
-        x--composition [array of mol frac]
-    outputs: (where n is mole number)
-        dadn--n*partial(alphar)/partial(ni)                     (Eq. 7.16 in GERG)
-        dnadn--partial(n*alphar)/partial(ni)                    (Eq. 7.15 in GERG)
+    #inputs:
+        #icomp--component number of which to take derivative
+        #jcomp--component number of which to take derivative
+        #t--temperature (K)
+        #D--density (mol/L)
+        #x--composition [array of mol frac]
+    #outputs: (where n is mole number)
+        #dadn--n*partial(alphar)/partial(ni)                     (Eq. 7.16 in GERG)
+        #dnadn--partial(n*alphar)/partial(ni)                    (Eq. 7.15 in GERG)
 
-        dtdn--n*[partial(Tred)/partial(ni)]/Tred                (Eq. 7.19 in GERG)
-        dvdn--n*[partial(Vred)/partial(ni)]/Vred                (Eq. 7.18 in GERG)
-            (=-n*[partial(Dred)/partial(ni)]/Dred)
-        daddn--del*n*partial(darddel)/partial(ni)               (Eq. 7.17 in GERG)
-            where darddel=partial(alphar)/partial(del)
-        d2adnn--n*partial^2(n*alphar)/partial(ni)/partial(nj)   (Eq. 7.46 in GERG)
-            the following are at constant tau and/or del
-        dadxi--partial(alphar)/partial(xi)                      (Eq. 7.21g in GERG)
-        sdadxi--sum[xi*partial(alphar)/partial(xi)]             (Eq. 7.21g in GERG)
-        dadxij--partial^2(alphar)/partial(xi)/partial(xj)       (Eq. 7.21i in GERG)
-        daddx--del*partial^2(alphar)/partial(xi)/partial(del)   (Eq. 7.21j in GERG)
-        daddxii--del*partial^3(alphar)/partial(xi)/partial(xj)/partial(del)
+        #dtdn--n*[partial(Tred)/partial(ni)]/Tred                (Eq. 7.19 in GERG)
+        #dvdn--n*[partial(Vred)/partial(ni)]/Vred                (Eq. 7.18 in GERG)
+            #(=-n*[partial(Dred)/partial(ni)]/Dred)
+        #daddn--del*n*partial(darddel)/partial(ni)               (Eq. 7.17 in GERG)
+            #where darddel=partial(alphar)/partial(del)
+        #d2adnn--n*partial^2(n*alphar)/partial(ni)/partial(nj)   (Eq. 7.46 in GERG)
+            #the following are at constant tau and/or del
+        #dadxi--partial(alphar)/partial(xi)                      (Eq. 7.21g in GERG)
+        #sdadxi--sum[xi*partial(alphar)/partial(xi)]             (Eq. 7.21g in GERG)
+        #dadxij--partial^2(alphar)/partial(xi)/partial(xj)       (Eq. 7.21i in GERG)
+        #daddx--del*partial^2(alphar)/partial(xi)/partial(del)   (Eq. 7.21j in GERG)
+        #daddxii--del*partial^3(alphar)/partial(xi)/partial(xj)/partial(del)
 
-    other calculated variables:
-        d2addn--del*par.(n*(par.(alphar)/par.(n)/par.(del)      (Eq. 7.50 in GERG)
-        d2adtn--tau*par.(n*(par.(alphar)/par.(n)/par.(tau)      (Eq. 7.51 in GERG)
-        d2adxn--par.(n*(par.(alphar)/par.(n)/par.(xj)           (Eq. 7.52 in GERG)
-    '''
-    defname = sys._getframe(0).f_code.co_name, locals()
+    #other calculated variables:
+        #d2addn--del*par.(n*(par.(alphar)/par.(n)/par.(del)      (Eq. 7.50 in GERG)
+        #d2adtn--tau*par.(n*(par.(alphar)/par.(n)/par.(tau)      (Eq. 7.51 in GERG)
+        #d2adxn--par.(n*(par.(alphar)/par.(n)/par.(xj)           (Eq. 7.52 in GERG)
+    #'''
+    #_inputerrorcheck(locals())
+    #_icomp.value, _jcomp.value = icomp, jcomp
+    #_t.value, _D.value = t, D
+    #for each in range(len(x)): _x[each] = x[each]
 
-    _inputerrorcheck(locals())
-    _icomp.value, _jcomp.value = icomp, jcomp
-    _t.value, _D.value = t, D
-    for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.phiderv_(ctypes.byref(_icomp),
-                        ctypes.byref(_jcomp),
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_dadn),
-                        ctypes.byref(_dnadn),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        raise RefproproutineError(u'function "phiderv" unsupported in Windows')
-        _rp.PHIDRVdll(ctypes.byref(_icomp),
-                        ctypes.byref(_jcomp),
-                        ctypes.byref(_t),
-                        ctypes.byref(_D),
-                        _x,
-                        ctypes.byref(_dadn),
-                        ctypes.byref(_dnadn),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    return _prop(icomp = icomp, jcomp = jcomp, t = t, D = D, x = x,
-            dadn = _dadn.value, dnadn = _dnadn.value, ierr = _ierr.value,
-            herr = _herr.value, defname = defname)
+    #_rpphiderv_(byref(_icomp), byref(_jcomp), byref(_t), byref(_D), _x,
+                 #byref(_dadn), byref(_dnadn), byref(_ierr), byref(_herr),
+                 #c_long(255))
 
+    #return _prop(icomp = icomp, jcomp = jcomp, t = t, D = D, x = x,
+            #dadn = _dadn.value, dnadn = _dnadn.value, ierr = _ierr.value,
+            #herr = _herr.value, defname = 'phinderv')
+u"""
+calculate various derivatives needed for VLE determination
+c  based on derivations in the GERG-2004 document for natural gas
+c
+c  inputs:
+c        iderv--set to 1 for first order derivatives only (dadn and dnadn)
+c               set to 2 for full calculations
+c        t--temperature (K)
+c      rho--density (mol/L)
+c        x--composition [array of mol frac]
+c
+c  outputs: (where n is mole number)
+c           (the listed equation numbers are those in the GERG manuscript)
+c    dnadn--partial(n*alphar)/partial(ni)                   Eq. 7.15
+c     dadn--n*partial(alphar)/partial(ni)                   Eq. 7.16
+c    daddn--del*n*par.(par.(alphar)/par.(del))/par.(ni)     Eq. 7.17
+c     dvdn--n*[partial(Vred)/partial(ni)]/Vred              Eq. 7.18
+c           (=-n*[partial(Dred)/partial(ni)]/Dred)
+c     dtdn--n*[partial(Tred)/partial(ni)]/Tred              Eq. 7.19
+c    dadxi--partial(alphar)/partial(xi)                     Eq. 7.21g
+c   sdadxi--sum[xi*partial(alphar)/partial(xi)]             Eq. 7.21g
+c   dadxij--partial^2(alphar)/partial(xi)/partial(xj)       Eq. 7.21i
+c    daddx--del*partial^2(alphar)/partial(xi)/partial(del)  Eq. 7.21j
+c    dadtx--tau*partial^2(alphar)/partial(xi)/partial(tau)  Eq. 7.21k
+c   dphidT--par.(ln(phi))/par.(T) (constant p,n,x)          Eq. 7.29
+c   dphidp--par.(ln(phi))/par.(p) (constant T,n,x)          Eq. 7.30
+c  dphidnj--n*par.[ln(phi(i))]/par(nj) (constant T,p)       Eq. 7.31
+c  dlnfinidT--par.[ln(fi/ni)]/par(T)                        Eq. 7.36
+c  dlnfinidV--n*par.[ln(fi/ni)]/par(V)                      Eq. 7.37
+c   d2adbn--    par.[par.(n*alphar)/par.(ni)]/par.(T)       Eq. 7.44
+c   d2adnn--n*partial^2(n*alphar)/partial(ni)/partial(nj)   Eq. 7.46 and 7.47 (similar to 7.38)
+c   d2addn--del*par.[n*par.(alphar)/par.(ni)]/par.(del)     Eq. 7.50
+c   d2adtn--tau*par.[n*par.(alphar)/par.(ni)]/par.(tau)     Eq. 7.51
+c   d2adxn--    par.[n*par.(alphar)/par.(ni)]/par.(xj)      Eq. 7.52
+c   ddrdxn--par.[n*par.(Dred)/par.(ni)]/par.(xj)            Eq. 7.55
+c   dtrdxn--par.[n*par.(Tred)/par.(ni)]/par.(xj)            Eq. 7.56
+c     dpdn--n*partial(p)/partial(ni)                        Eq. 7.63 constant T,V,nj
+c    dpdxi--partial(p)/partial(xi)                          constant T,V
+c d2adxnTV--par.[n*par.(alphar)/par.(ni)]/par.(xj)          constant T,V
+c  dadxiTV--partial(alphar)/partial(xi)                     constant T,V
+c daddxiTV--del*partial^2(alphar)/partial(xi)/partial(del)  constant T,V
+c  dphidxj--par.(ln(phi))/par.(xj)                          constant T,p,x
+c    xlnfi--Log of modified fugacity
+"""
 
 def cstar(t, p, v, x):
     u'''Calculate the critical flow factor, C*, for nozzle flow of a gas
@@ -7363,75 +5215,255 @@ def cstar(t, p, v, x):
         Ds--nozzle throat molar density [mol/L]
         ps--nozzle throat pressure [kPa]
         ws--nozzle throat speed of sound [m/s]'''
-    defname = sys._getframe(0).f_code.co_name, locals()
 
     _inputerrorcheck(locals())
     _v.value = v
     _t.value, _p.value = t, p
     for each in xrange(len(x)): _x[each] = x[each]
-    if platform.system() == u'Linux':
-        _rp.cstar_(ctypes.byref(_t),
-                        ctypes.byref(_p),
-                        ctypes.byref(_v),
-                        _x,
-                        ctypes.byref(_cs),
-                        ctypes.byref(_ts),
-                        ctypes.byref(_Ds),
-                        ctypes.byref(_ps),
-                        ctypes.byref(_ws),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
-    elif platform.system() == u'Windows':
-        _rp.CSTARdll(ctypes.byref(_t),
-                        ctypes.byref(_p),
-                        ctypes.byref(_v),
-                        _x,
-                        ctypes.byref(_cs),
-                        ctypes.byref(_ts),
-                        ctypes.byref(_Ds),
-                        ctypes.byref(_ps),
-                        ctypes.byref(_ws),
-                        ctypes.byref(_ierr),
-                        ctypes.byref(_herr),
-                        ctypes.c_long(255))
+    
+    _rpcstar_(byref(_t), byref(_p), byref(_v), _x, byref(_cs), byref(_ts),
+               byref(_Ds), byref(_ps), byref(_ws), byref(_ierr),
+               byref(_herr), c_long(255))
+
     return _prop(t = t, p = p, v = v, x = x, cs = _cs.value, ts = _ts.value,
             Ds = _Ds.value, ps = _ps.value, ws = _ws.value, ierr = _ierr.value,
-            herr = _herr.value, defname = defname)
+            herr = _herr.value, defname = u'cstar')
 
 
-##def satdata(x, nrun=2):
-##    '''Calculates the phase boundary of a mixture at a given composition, and
-##    the critical point, cricondentherm, and cricondenbar. The use of array
-##    xarr2 makes it possible that this can be called multiple times to get
-##    better splines.
-##
-##    inputs:
-##        x--composition [array of mol frac]
-##        nrun--no off runs to increase accuracy'''
-##    defname = sys._getframe(0).f_code.co_name, locals()
-##
-##    _inputerrorcheck(locals())
-##    for each in range(len(x)): _x[each] = x[each]
-##    if platform.system() == 'Linux':
-##        for each in range(nrun):
-##            _rp.satdata_(_x)
-##    elif platform.system() == 'Windows':
-##        for each in range(nrun):
-##            _rp.SATDATAdll(_x)
-##    #enable getsatdata
-##    #enable setsatdata
-##    #return from getsatdata
-##    #only works in the beta version
+#compilations
 
 
 
-#compilation
+#missing to do 
+#SATTP
+#CRTPNT
+#SATGV
+#MAXP
+#DERVPVT
+#DBDT2
+#VIRBCD
+#HEAT
 
+
+
+u"""
+      subroutine SATTP (t,p,x,iFlsh,iGuess,d,Dl,Dv,xliq,xvap,q,ierr,
+     & herr)
+c
+c  Estimate temperature, pressure, and compositions to be used
+c  as initial guesses to SATTP
+c
+c  inputs:
+c   iFlsh--Phase flag:    0 - Flash calculation (T and P known)
+c                         1 - T and xliq known, P and xvap returned
+c                         2 - T and xvap known, P and xliq returned
+c                         3 - P and xliq known, T and xvap returned
+c                         4 - P and xvap known, T and xliq returned
+c                         if this value is negative, the retrograde point will be returned
+c        t--temperature [K] (input or output)
+c        p--pressure [MPa] (input or output)
+c        x--composition [array of mol frac]
+c   iGuess--if set to 1, all inputs are used as initial guesses for the calculation
+c  outputs:
+c        d--overall molar density [mol/L]
+c       Dl--molar density [mol/L] of saturated liquid
+c       Dv--molar density [mol/L] of saturated vapor
+c     xliq--liquid phase composition [array of mol frac]
+c     xvap--vapor phase composition [array of mol frac]
+c        q--quality
+c     ierr--error flag:   0 = successful
+c                         1 = unsuccessful
+c     herr--error string (character*255 variable if ierr<>0)
+c
+c
+
+broutine CRTPNT (z,tc,pc,rhoc,ierr,herr)
+c
+c     Subroutine for the determination of true critical point of a
+c     mixture using the Method of Michelsen (1984)
+c
+c     The routine requires good initial guess values of pc and tc.
+c     On convergence, the values of bb and cc should be close to zero
+c     and dd > 0 for a two-phase critical point.
+c     bb=0, cc=0 and dd <= 0 for an unstable critical point.
+c
+c  inputs:
+c         z--composition [array of mol frac]
+c
+c  outputs:
+c        tc--critical temperature [K]
+c        pc--critical pressure [kPa]
+c      rhoc--critical density [mol/l]
+c      ierr--error flag
+c      herr--error string (character*255 variable if ierr<>0)
+c
+
+     subroutine SATGV (t,p,z,vf,b,ipv,ityp,isp,rhox,rhoy,x,y,ierr,herr)
+c
+c  Calculates the bubble or dew point state using the entropy or density method
+c  of GV.  The caculation method is similar to the volume based algorithm of GERG.
+c  The cricondenbar and cricondentherm are estimated using the method in:  M.L.
+c  Michelsen, Saturation point calculations, Fluid Phase Equilibria, 23:181, 1985.
+c
+c  inputs:
+c         t--temperature [K]
+c         p--pressure [kPa]
+c         z--overall composition [array of mol frac]
+c        vf--vapor fraction (0>=vf>=1)
+c            set vf=0 for liquid and vf=1 for vapor
+c            for ityp=6, vf=1 assumes x is liquid and y is vapor,
+c                    and vf=0 assumes y is liquid and x is vapor
+c         b--input value, either entropy [J/mol-K] or density [mol/l]
+c       ipv--pressure or volume based algorithm
+c            1 -> pressure based
+c            2 -> volume based
+c      ityp--input values
+c            0 -> given p, calculate t
+c            1 -> given t, calculate p
+c            2 -> cricondentherm condition, calculate t,p (ipv=1 only)
+c            3 -> cricondenbar condition, calculate t,p (ipv=1 only)
+c            5 -> given entropy, calculate t,p
+c            6 -> given density, calculate t,p
+c       isp--use values from Splines as initial guesses if set to 1
+c
+c  outputs: (initial guesses must be sent in all variables (unless isp=1))
+c         t--temperature [K]
+c         p--pressure [kPa]
+c      rhox--density of x phase [mol/l]
+c      rhoy--density of y phase [mol/l]
+c         x--composition of x array [array of mol frac]
+c         y--composition of y array [array of mol frac]
+c      ierr--error flag:  0 = successful
+c                         1 = LUdecomp failed
+c                         2 = derivatives are not available in RDXHMX
+c                        71 = no convergence
+c                        72 = log values too large
+c                        73 = p or T out of range
+c                        74 = trival solution
+c                        75 = unacceptable F
+c                        76 = False roots
+c                        77 = density out of range
+c                        80 = vf < 0 or vf > 1
+c                        81 = sum(z)<>1
+c                        82 = input rho<=0
+c      herr--error string (character*255 variable if ierr<>0)
+c
+c
+c  equations to be solved simultaneously are:
+c  --pressure based:
+c      f(1:n)=log(y/x)-log((fxi/nxi)/(fyi/nyi))=0
+c      f(n+1)=sum(y(i)-x(i))=0
+c      f(n+2)=b/binput-1=0, where b = p, t, d, or s
+c
+c  --volume based:
+c      f(1:n) - log(y/x)-log((fxi/nxi)/(fyi/nyi))=0
+c      f(n+1) - sum(y(i)-x(i))=0
+c      f(n+2) - py=px
+c      f(n+3) - b/binput-1=0, where b = p, t, d, or s
+c
+c  variables:
+c     1 to nc - log(k(i))
+c     nc+1    - log(t)
+c     nc+2    - log(p) or log(rhox)
+c     nc+3    -           log(rhoy)
+c
+
+
+  subroutine MAXP (x,tm,pm,Dm,ierr,herr)
+c
+c  values at the maximum pressure along the saturation line, these are
+c  returned from the call to SATSPLN and apply only to the composition x
+c  sent to SATSPLN.
+c
+c  input:
+c        x--composition [array of mol frac]
+c  outputs:
+c       tm--temperature [K]
+c       pm--pressure [kPa]
+c       Dm--density [mol/L]
+c     ierr--error flag:  0 = successful
+c     herr--error string (character*255 variable if ierr<>0)
+c
+
+
+      subroutine DERVPVT (t,rho,x,
+     &                    dPdD,dPdT,d2PdD2,d2PdT2,d2PdTD,
+     &                    dDdP,dDdT,d2DdP2,d2DdT2,d2DdPT,
+     &                    dTdP,dTdD,d2TdP2,d2TdD2,d2TdPD)
+c
+c  compute derivatives of temperature, pressure, and density
+c  using core functions for Helmholtz free energy equations only
+c
+c  inputs:
+c        t--temperature [K]
+c      rho--molar density [mol/L]
+c        x--composition [array of mol frac]
+c  outputs:
+c     dPdD--derivative dP/drho [kPa-L/mol]
+c     dPdT--derivative dP/dT [kPa/K]
+c     dDdP--derivative drho/dP [mol/(L-kPa)]
+c     dDdT--derivative drho/dT [mol/(L-K)]
+c     dTdP--derivative dT/dP [K/kPa]
+c     dTdD--derivative dT/drho [(L-K)/mol]
+c   d2PdD2--derivative d^2P/drho^2 [kPa-L^2/mol^2]
+c   d2PdT2--derivative d2P/dT2 [kPa/K^2]
+c   d2PdTD--derivative d2P/dTd(rho) [J/mol-K]
+
+  subroutine DBDT2 (t,x,dbt2)
+c
+c  compute the 2nd derivative of B (B is the second virial coefficient) with
+c  respect to T as a function of temperature and composition.
+c
+c  inputs:
+c        t--temperature [K]
+c        x--composition [array of mol frac]
+c  outputs:
+c      dbt2--2nd derivative of B with respect to T [L/mol-K^2]
+c
+
+subroutine VIRBCD (t,x,b,c,d)
+c
+c  Compute virial coefficients as a function of temperature
+c  and composition.  The routine currently works only for pure fluids and
+c  for the Helmholtz equation.
+c  All values are computed exactly based on the terms in the eos, not
+c  as done in VIRB by calculating properties at rho=1.d-8.
+c
+c  inputs:
+c        t--temperature [K]
+c        x--composition [array of mol frac]
+c  outputs:
+c        b--second virial coefficient [l/mol]
+c        c-- third virial coefficient [(l/mol)^2]
+c        d--fourth virial coefficient [(l/mol)^3]
+c
+
+
+
+      subroutine HEAT (t,rho,x,hg,hn,ierr,herr)
+c
+c  Compute the ideal gas gross and net heating values.
+c
+c  inputs:
+c        t--temperature [K]
+c      rho--molar density [mol/L]
+c        x--composition [array of mol frac]
+c
+c  outputs:
+c       hg--gross (or superior) heating value [J/mol]
+c       hn--net (or inferior) heating value [J/mol]
+c     ierr--error flag:  0 = successful
+c                        1 = error in chemical formula
+c                        2 = not all heating values available
+c     herr--error string (character*255 variable if ierr<>0)
+c
+
+
+"""
 
 if __name__ == u'__main__':
     _test()
 
-##    setup('def', 'water', 'ammonia')
-##    print(dir(_rp))
-##    satdata([0.4, 0.6])
+    #import profile
+    #profile.run('_test()')
+

@@ -22,13 +22,13 @@ echo "Enter the path where the REFPROP source files were installed to (relative 
 echo "Hit Enter to accept the default of $DefaultREFPROPSourcePath"
 read REFPROPSourcePath;
 if [ "$REFPROPSourcePath" == "" ]; then
-	REFPROPSourcePath="${DefaultREFPROPSourcePath}"
+	REFPROPSourcePath=${DefaultREFPROPSourcePath}
 fi;
 echo
 echo "Enter base path where the compiled REFPROP files will be installed to (relative paths not allowed)"
 echo "Hit Enter to accept the default of $Defaultpath"
-echo 'Warning: You may need to be running this script as superuser (i.e. "sudo ./rp2so") for /usr/local/lib/refprop/'
-echo 'You can press Control-C to stop the script now.'
+echo "Warning: You may need to be running this script as superuser (i.e. 'sudo ./rp2so') for $Defaultpath"
+echo "You can press Control-C to stop the script now."
 read path;
 if [ "$path" == "" ]; then
 	path=${Defaultpath}
@@ -37,7 +37,7 @@ echo
 
 #delete previous installation
 echo "Are you sure you want to delete $path ?"
-echo 'Enter "y" for yes, Control-C to stop the script now, or anything else for no'
+echo "Enter 'y' for yes, Control-C to stop the script now, or anything else for no"
 read yess;
 echo
 if [ "$yess" == "y" ]; then
@@ -48,82 +48,75 @@ else
 fi;
 
 #create directories
-echo '--- Creating directories ---'
+echo "--- Creating directories ---"
 mkdir -p ${path}/FOR/
 mkdir -p ${path}/fluids/
 mkdir -p ${path}/mixtures/
  
 #copy fortran / refprop files to ${path}
-echo '--- Copying source files ---'
+echo "--- Copying source files ---"
 cp -r "${REFPROPSourcePath}"/fortran/*.FOR ${path}/FOR/
 cp -r "${REFPROPSourcePath}"/fluids/* ${path}/fluids/
 cp -r "${REFPROPSourcePath}"/mixtures/* ${path}/mixtures/
  
 #allow read permission all
-echo '--- Changing file permissions ---'
+echo "--- Changing file permissions ---"
 chmod -R a+r ${path}/fluids/
 chmod -R a+r ${path}/mixtures/
 
-#rename all filenames to UPPERCASE
-echo '--- Renaming lowercase to UPPERCASE filenames ---'
+#rename all filenames to UPPERCASE and correct fortran extension (*.FOR > *.f)
+echo "--- Renaming lowercase to UPPERCASE filenames and correct extension---"
 cd ${path}/fluids/
 rename 'y/a-z/A-Z/' *
 cd ${path}/mixtures/
 rename 'y/a-z/A-Z/' *
+cd ${path}/FOR/
+rename 'y/a-z/A-Z/' *
+rename -f 's/\.FOR/\.f/' ${path}/FOR/*.FOR
 
-#modify PASS_FTN.FOR
+#modify PASS_FTN.f
 #remove windows specific command
-echo '--- Applying a linux specific fix to PASS_FTN.FOR ---'
-sed -i 's/      dll_export/c     dll_export/' ${path}/FOR/PASS_FTN.FOR
+echo "--- Applying a linux specific fix to PASS_FTN.f ---"
+sed -i 's/      dll_export/c     dll_export/' ${path}/FOR/PASS_FTN.f
 
 #process files (dos to unix)
-echo '--- Converting source file line endings from dos to unix ---'
-for files in ${path}/FOR/*.FOR ${path}/fluids/* ${path}/mixtures/*
+echo "--- Converting source file line endings from dos to unix ---"
+for files in ${path}/FOR/*.f ${path}/fluids/* ${path}/mixtures/*
 do
 	{
     echo "processing ${files}"
-    #change *.FOR files from dos to unix
+    #change *.f files from dos to unix
 	dos2unix -q ${files}
 	} &
 done
 #wait for multiprocessing to complete
 wait
 
-#modify *.FOR
-for files in ${path}/FOR/*.FOR
+#modify *.f
+echo "--- Applying common file fix ---"
+for files in ${path}/FOR/*.f
 do
    {
-   sudo sed -i "s/'commons.for'/'COMMONS.for'/" ${files}
-   sudo sed -i "s/'comtrn.for'/'COMTRN.for'/" ${files}
+   sudo sed -i "s/'commons.for'/'COMMONS.include'/" ${files}
+   sudo sed -i "s/'comtrn.for'/'COMTRN.include'/" ${files}
    } &
 done
 wait
-
-#rename COMMONS.FOR and COMTRN.FOR to *.for
-rename -f 's/\.FOR/\.for/' ${path}/FOR/COMMONS.FOR ${path}/FOR/COMTRN.FOR
-
-#create object file
-echo '--- Creating object files ---'
-mkdir -p /tmp/refprop/object
-cd /tmp/refprop/object
-gfortran -fopenmp -fpic -c -g ${path}/FOR/*.FOR
+#rename COMMONS.f and COMTRN.f to *.include
+rename -f 's/\.f/\.include/' ${path}/FOR/COMMONS.f ${path}/FOR/COMTRN.f
 
 #create the dynamically link "shared objects" (so) library
-echo '--- Creating shared object file ---'
-gfortran -shared -Wl,-soname,librefprop.so.9 -o ${path}/librefprop.so.9.1 /tmp/refprop/object/*.o -lc -fopenmp
+echo "--- Creating shared object file ---"
+#option -fopenmp is possible but at present does not have any speed gains on the contrary
+#option -lc, does nothing?
+gfortran -shared -fpic -Ofast ${path}/FOR/*.f -Wl,-soname,librefprop.so.9 -o ${path}/librefprop.so.9.1 #-lc -fopenmp 
 
-#first get out of the folder that is going to be deleted
-cd
-#then delete temporary object files
-echo '--- Removing temporary files ---'
-rm -rf /tmp/refprop/
- 
 #install the object file
-echo '--- Installing object file ---'
+echo "--- Installing object file ---"
 rm -rf ${path%/refprop}/librefprop.so
 ldconfig -n ${path}
 ln -s ${path}/librefprop.so.9 ${path%/refprop}/librefprop.so
 
 echo
 echo "Note: If you want to display ported commands, type:"
-echo "nm ${path}librefprop.so"
+echo "nm ${path%/refprop}/librefprop.so"

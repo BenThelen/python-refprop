@@ -1,18 +1,31 @@
-This Python module (available for both python version 2.7 and 3.2) uses a compiled fortran version of the NIST Standard Reference Database 23 (a.k.a. REFPROP (REFerence fluid PROPerties)), version 9.1.
+This Python module (available for both python version 2.7 and 3.2) uses a
+compiled fortran version of the NIST Standard Reference Database 23
+(a.k.a. REFPROP (REFerence fluid PROPerties)), version 9.1.
 
-REFPROP source code has copyright by the United States Secretary of Commerce and its distribution is controlled by the National Institute of Standards and Technology (NIST). 
+REFPROP source code has copyright by the United States Secretary of Commerce and
+its distribution is controlled by the National Institute of Standards and
+Technology (NIST). 
 
-In order to legally obtain a copy of the REFPROP software and fortran source codes, use the following web page: http://www.nist.gov/srd/nist23.cfm . Once purchased, the software will be delivered as a windows self extracting installation file (.exe). In order to access the files required by this python module, you must install REFPROP using this self extracting installation file and install REFPROP in windows.
+In order to legally obtain a copy of the REFPROP software and fortran source
+codes, use the following web page: http://www.nist.gov/srd/nist23.cfm.
+Once purchased, the software will be delivered as a windows self extracting
+installation file (.exe). In order to access the files required by this python module, you must install REFPROP using this self extracting installation file and install REFPROP in windows.
 
 FOR WINDOWS:
 Install the REFPROP software on your system.
-Add two environment variables called RPprefix and Path. See http://www.boulder.nist.gov/div838/theory/refprop/Frequently_asked_questions.htm at Excel Applications for more details.
+Add two environment variables called RPprefix and Path. See
+http://www.boulder.nist.gov/div838/theory/refprop/Frequently_asked_questions.htm
+at Excel Applications for more details.
 Install the python API to refprop in your python dist-packages
 
 FOR LINUX:
-Use WINE to install refprop.exe in the C:\Program Files\REFPROP\ directory or use a virtual machine with windows to install REFPROP (if WINE doesn't work for you) and then make the installed files available on a linux accessible partition.
+Use WINE to install refprop.exe in the C:\Program Files\REFPROP\ directory or
+use a virtual machine with windows to install REFPROP (if WINE doesn't work for
+you) and then make the installed files available on a linux accessible partition.
 
-Execute the shell script, rp2so, to compile and link the refprop shared object files. In order for rp2so to run successfully, you will need to have the following installed on Linux:
+Execute the shell script, rp2so, to compile and link the refprop shared object
+files. In order for rp2so to run successfully, you will need to have the
+following installed on Linux:
 	gfortran
 	sed
 	dos2unix
